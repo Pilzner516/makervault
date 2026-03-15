@@ -1,14 +1,26 @@
 import { Platform } from 'react-native';
-import type { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
 
-let Voice: typeof import('@react-native-voice/voice').default | null = null;
+type SpeechModule = {
+  start(options: { lang: string; interimResults: boolean }): void;
+  stop(): void;
+  abort(): void;
+  requestPermissionsAsync(): Promise<{ granted: boolean }>;
+  addListener(
+    eventName: string,
+    listener: (event: Record<string, unknown>) => void,
+  ): { remove(): void };
+};
 
-// Only load on native platforms — requires dev build (not available in Expo Go)
+let speechModule: SpeechModule | null = null;
+
 if (Platform.OS !== 'web') {
   try {
-    Voice = require('@react-native-voice/voice').default;
+    const mod = require('expo-speech-recognition') as {
+      ExpoSpeechRecognitionModule: SpeechModule;
+    };
+    speechModule = mod.ExpoSpeechRecognitionModule;
   } catch {
-    // Graceful degradation — native module not available (e.g. Expo Go)
+    // Not available
   }
 }
 
@@ -22,66 +34,69 @@ type VoiceCallbacks = {
 let callbacks: VoiceCallbacks | null = null;
 
 export function isVoiceAvailable(): boolean {
-  return Voice != null;
+  return speechModule != null;
 }
 
 export function setupVoiceListeners(cbs: VoiceCallbacks): () => void {
-  if (!Voice) return () => {};
+  if (!speechModule) return () => {};
 
   callbacks = cbs;
 
-  Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-    const text = e.value?.[0] ?? '';
-    callbacks?.onResult(text);
-  };
+  const resultSub = speechModule.addListener('result', (event) => {
+    const results = event.results as Array<{ transcript: string }> | undefined;
+    const text = results?.[0]?.transcript ?? '';
+    const isFinal = event.isFinal as boolean | undefined;
+    if (isFinal) {
+      callbacks?.onResult(text);
+    } else {
+      callbacks?.onPartialResult(text);
+    }
+  });
 
-  Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
-    const text = e.value?.[0] ?? '';
-    callbacks?.onPartialResult(text);
-  };
+  const errorSub = speechModule.addListener('error', (event) => {
+    callbacks?.onError((event.error as string) ?? 'Voice recognition error');
+  });
 
-  Voice.onSpeechError = (e: SpeechErrorEvent) => {
-    callbacks?.onError(e.error?.message ?? 'Voice recognition error');
-  };
-
-  Voice.onSpeechEnd = () => {
+  const endSub = speechModule.addListener('end', () => {
     callbacks?.onEnd();
-  };
+  });
 
   return () => {
-    if (Voice) {
-      Voice.onSpeechResults = null as unknown as (e: SpeechResultsEvent) => void;
-      Voice.onSpeechPartialResults = null as unknown as (e: SpeechResultsEvent) => void;
-      Voice.onSpeechError = null as unknown as (e: SpeechErrorEvent) => void;
-      Voice.onSpeechEnd = null as unknown as () => void;
-    }
+    resultSub.remove();
+    errorSub.remove();
+    endSub.remove();
     callbacks = null;
   };
 }
 
 export async function startRecognition(): Promise<void> {
-  if (!Voice) return;
+  if (!speechModule) return;
   try {
-    await Voice.start('en-US');
+    const { granted } = await speechModule.requestPermissionsAsync();
+    if (!granted) {
+      callbacks?.onError('Microphone permission denied');
+      return;
+    }
+    speechModule.start({ lang: 'en-US', interimResults: true });
   } catch {
     callbacks?.onError('Failed to start voice recognition');
   }
 }
 
 export async function stopRecognition(): Promise<void> {
-  if (!Voice) return;
+  if (!speechModule) return;
   try {
-    await Voice.stop();
+    speechModule.stop();
   } catch {
-    // Ignore stop errors
+    // Ignore
   }
 }
 
 export async function cancelRecognition(): Promise<void> {
-  if (!Voice) return;
+  if (!speechModule) return;
   try {
-    await Voice.cancel();
+    speechModule.abort();
   } catch {
-    // Ignore cancel errors
+    // Ignore
   }
 }

@@ -6,7 +6,10 @@
       "Bash(npx expo:*)",
       "Bash(npx expo-doctor:*)",
       "Bash(npx tsc:*)",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(npx eas:*)",
+      "WebFetch(domain:job-logs.eascdn.net)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }
