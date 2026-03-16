@@ -63,5 +63,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     supabase.auth.onAuthStateChange((_event, session) => {
       useAuthStore.getState().setSession(session);
     });
+
+    // Auto sign-in anonymously if no session exists
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        supabase.auth.signInAnonymously().catch((e) => {
+          console.warn('Anonymous sign-in failed:', e);
+          set({ isLoading: false });
+        });
+      }
+    });
   },
 }));

@@ -1,21 +1,20 @@
-// MakerVault — Dark industrial theme. No light mode.
+// MakerVault — Legacy theme file. New code uses constants/themes.ts + ThemeContext.
 
 export const Colors = {
   light: {
-    // Forced dark — no light mode
-    text: '#f0ede0',
-    background: '#161616',
-    tint: '#f0a030',
-    icon: '#888888',
-    tabIconDefault: '#3a3a3a',
-    tabIconSelected: '#f0a030',
+    text: '#e8f8fc',
+    background: '#060d10',
+    tint: '#00c8e8',
+    icon: '#4a8a9a',
+    tabIconDefault: '#1a3a48',
+    tabIconSelected: '#00c8e8',
   },
   dark: {
-    text: '#f0ede0',
-    background: '#161616',
-    tint: '#f0a030',
-    icon: '#888888',
-    tabIconDefault: '#3a3a3a',
-    tabIconSelected: '#f0a030',
+    text: '#e8f8fc',
+    background: '#060d10',
+    tint: '#00c8e8',
+    icon: '#4a8a9a',
+    tabIconDefault: '#1a3a48',
+    tabIconSelected: '#00c8e8',
   },
 };

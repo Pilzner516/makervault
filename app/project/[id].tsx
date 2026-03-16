@@ -2,14 +2,23 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
+  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import {
+  ScreenLayout, ScreenHeader,
+  MetricRow, MetricTile,
+  EngravingLabel, FieldRow, PanelCard,
+  PrimaryButton, SecondaryButton,
+  Badge, EmptyState,
+  Spacing, FontSize, Radius,
+} from '@/components/UIKit';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { startBuild, completeBuild } from '@/lib/projectEngine';
@@ -19,16 +28,11 @@ interface ProjectPartWithInventory extends ProjectPart {
   inventoryPart: Part | null;
 }
 
-const DIFFICULTY_COLORS: Record<string, string> = {
-  beginner: 'bg-green-100 text-green-700',
-  intermediate: 'bg-yellow-100 text-yellow-700',
-  advanced: 'bg-red-100 text-red-700',
-};
-
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { parts, fetchParts } = useInventoryStore();
 
   const [project, setProject] = useState<Project | null>(null);
@@ -68,17 +72,22 @@ export default function ProjectDetailScreen() {
 
   if (!project) {
     return (
-      <View className="flex-1 items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Stack.Screen options={{ title: 'Project' }} />
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
         {isLoading ? (
-          <Text className="text-base text-zinc-400">Loading...</Text>
+          <EmptyState
+            icon="hourglass-outline"
+            title="Loading..."
+          />
         ) : (
-          <>
-            <MaterialIcons name="error-outline" size={48} color="#a1a1aa" />
-            <Text className="mt-3 text-base text-zinc-400">Project not found</Text>
-          </>
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Project not found"
+            actionLabel="Go Back"
+            onAction={() => router.back()}
+          />
         )}
-      </View>
+      </ScreenLayout>
     );
   }
 
@@ -87,9 +96,6 @@ export default function ProjectDetailScreen() {
   ).length;
   const totalCount = projectParts.length;
   const allPartsOwned = totalCount > 0 && ownedCount === totalCount;
-
-  const diffColor = DIFFICULTY_COLORS[project.difficulty ?? ''] ?? '';
-  const [diffBg, diffText] = diffColor.split(' ');
 
   const handleStartBuild = () => {
     Alert.alert(
@@ -152,114 +158,125 @@ export default function ProjectDetailScreen() {
     ]);
   };
 
+  const getDiffBadgeVariant = (): 'ok' | 'low' | 'out' | undefined => {
+    if (!project.difficulty) return undefined;
+    if (project.difficulty === 'beginner') return 'ok';
+    if (project.difficulty === 'intermediate') return 'low';
+    if (project.difficulty === 'advanced') return 'out';
+    return undefined;
+  };
+
   return (
-    <View className="flex-1 bg-zinc-50 dark:bg-zinc-950">
-      <Stack.Screen
-        options={{
-          title: project.title,
-          headerRight: () => (
-            <Pressable onPress={handleDelete} className="mr-2">
-              <MaterialIcons name="delete-outline" size={24} color="#ef4444" />
-            </Pressable>
-          ),
-        }}
+    <ScreenLayout style={{ paddingTop: insets.top }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader
+        title={project.title}
+        subtitle={project.status.replace('_', ' ')}
+        backLabel="Projects"
+        onBack={() => router.back()}
+        rightElement={
+          <TouchableOpacity onPress={handleDelete} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={22} color={colors.statusOut} />
+          </TouchableOpacity>
+        }
       />
+
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
-        {/* Project info */}
-        <View className="mx-4 mt-4 rounded-xl bg-white p-5 dark:bg-zinc-800">
-          <Text className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-            {project.title}
-          </Text>
+        {/* Metrics */}
+        <MetricRow>
+          <MetricTile value={ownedCount} label="Owned" color={colors.statusOk} />
+          <MetricTile value={totalCount - ownedCount} label="Missing" color={totalCount - ownedCount > 0 ? colors.statusOut : colors.statusOk} />
+          <MetricTile value={project.estimated_hours ?? '\u2014'} label="Hours" />
+        </MetricRow>
 
+        {/* Project info card */}
+        <View style={{
+          backgroundColor: colors.bgCard, borderWidth: 0.5, borderColor: colors.borderDefault,
+          borderRadius: Radius.card, marginHorizontal: Spacing.md, marginTop: Spacing.sm, padding: Spacing.lg,
+        }}>
           {/* Meta row */}
-          <View className="mt-3 flex-row flex-wrap items-center gap-2">
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm }}>
             {project.difficulty && (
-              <View className={`rounded-full px-2.5 py-0.5 ${diffBg}`}>
-                <Text className={`text-xs font-medium capitalize ${diffText}`}>
-                  {project.difficulty}
-                </Text>
-              </View>
+              <Badge variant={getDiffBadgeVariant()!} label={project.difficulty} />
             )}
             {project.estimated_hours != null && (
-              <View className="flex-row items-center gap-1">
-                <MaterialIcons name="schedule" size={14} color="#a1a1aa" />
-                <Text className="text-sm text-zinc-500">
-                  {project.estimated_hours}h
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                <Text style={{ fontSize: FontSize.sm, color: colors.textMuted }}>{project.estimated_hours}h</Text>
               </View>
             )}
-            <View className="rounded-full bg-primary/10 px-2.5 py-0.5">
-              <Text className="text-xs font-medium capitalize text-primary">
-                {project.status.replace('_', ' ')}
-              </Text>
-            </View>
+            <Badge variant={project.status === 'completed' ? 'ok' : project.status === 'in_progress' ? 'low' : 'out'} label={project.status.replace('_', ' ')} />
           </View>
 
           {/* Description */}
           {project.description && (
-            <Text className="mt-3 text-base leading-6 text-zinc-700 dark:text-zinc-300">
+            <Text style={{ fontSize: FontSize.md, lineHeight: 22, color: colors.textSecondary, marginTop: Spacing.md }}>
               {project.description}
             </Text>
           )}
 
           {/* Source link */}
           {project.source_url && (
-            <Pressable
-              className="mt-3 flex-row items-center gap-1.5"
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.md }}
               onPress={() => WebBrowser.openBrowserAsync(project.source_url!)}
             >
-              <MaterialIcons name="open-in-new" size={16} color="#0a7ea4" />
-              <Text className="text-sm text-primary capitalize">
+              <Ionicons name="open-outline" size={16} color={colors.accent} />
+              <Text style={{ fontSize: FontSize.sm, color: colors.accent, textTransform: 'capitalize' }}>
                 View on {project.source ?? 'source'}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           )}
         </View>
 
         {/* Parts checklist */}
-        <View className="mx-4 mt-3 rounded-xl bg-white p-5 dark:bg-zinc-800">
-          <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Parts Checklist
-            </Text>
-            <Text className="text-sm text-zinc-400">
-              {ownedCount}/{totalCount} owned
-            </Text>
-          </View>
+        <EngravingLabel label="Parts checklist" />
+        <View style={{ paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm }}>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textFaint }}>{ownedCount}/{totalCount} owned</Text>
+        </View>
 
-          {projectParts.length === 0 ? (
-            <Text className="text-sm text-zinc-400">No parts linked</Text>
-          ) : (
-            projectParts.map((pp) => {
+        {projectParts.length === 0 ? (
+          <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, paddingHorizontal: Spacing.md }}>
+            No parts linked
+          </Text>
+        ) : (
+          <PanelCard>
+            {projectParts.map((pp, i) => {
               const hasEnough =
                 pp.inventoryPart != null &&
                 pp.inventoryPart.quantity >= pp.quantity_needed;
+              const partName = pp.inventoryPart?.name ?? `Part ${pp.part_id.slice(0, 8)}`;
+              const partMeta = `Need ${pp.quantity_needed} \u00B7 Have ${pp.inventoryPart?.quantity ?? 0}`;
 
               return (
-                <View
-                  key={pp.id}
-                  className="flex-row items-center border-b border-zinc-100 py-3 last:border-b-0 dark:border-zinc-700"
-                >
-                  <MaterialIcons
-                    name={hasEnough ? 'check-circle' : 'shopping-cart'}
+                <View key={pp.id} style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  paddingHorizontal: Spacing.md, paddingVertical: 13,
+                  backgroundColor: colors.bgRow,
+                  ...(i < projectParts.length - 1
+                    ? { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }
+                    : {}),
+                }}>
+                  <Ionicons
+                    name={hasEnough ? 'checkmark-circle' : 'cart-outline'}
                     size={20}
-                    color={hasEnough ? '#22c55e' : '#f59e0b'}
+                    color={hasEnough ? colors.statusOk : colors.accent}
                   />
-                  <View className="ml-3 flex-1">
-                    <Text className="text-base text-zinc-900 dark:text-zinc-100">
-                      {pp.inventoryPart?.name ?? `Part ${pp.part_id.slice(0, 8)}`}
-                    </Text>
-                    <Text className="text-xs text-zinc-500">
-                      Need {pp.quantity_needed} · Have{' '}
-                      {pp.inventoryPart?.quantity ?? 0}
-                    </Text>
+                  <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textPrimary }}>{partName}</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 }}>{partMeta}</Text>
                   </View>
                   {!hasEnough && (
-                    <Pressable
-                      className="rounded-lg bg-warning/10 px-3 py-1.5"
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={{
+                        backgroundColor: colors.accentBg, borderRadius: Radius.badge,
+                        paddingHorizontal: Spacing.md, paddingVertical: 6,
+                      }}
                       onPress={() =>
                         router.push({
                           pathname: '/reorder',
@@ -270,55 +287,52 @@ export default function ProjectDetailScreen() {
                         })
                       }
                     >
-                      <Text className="text-xs font-medium text-warning">
-                        Order
-                      </Text>
-                    </Pressable>
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: colors.accent }}>Order</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               );
-            })
-          )}
-        </View>
+            })}
+          </PanelCard>
+        )}
 
         {/* Action buttons */}
-        <View className="mx-4 mt-4 gap-3">
+        <View style={{ marginTop: Spacing.lg }}>
           {project.status === 'idea' && (
-            <Pressable
-              className={`flex-row items-center justify-center rounded-xl py-4 ${
-                allPartsOwned ? 'bg-primary' : 'bg-primary/60'
-              }`}
+            <PrimaryButton
+              label={allPartsOwned ? 'Start Build' : 'Start Build (missing parts)'}
+              icon="build-outline"
               onPress={handleStartBuild}
-            >
-              <MaterialIcons name="build" size={20} color="#fff" />
-              <Text className="ml-2 text-base font-semibold text-white">
-                {allPartsOwned ? 'Start Build' : 'Start Build (missing parts)'}
-              </Text>
-            </Pressable>
+            />
           )}
 
           {project.status === 'in_progress' && (
-            <Pressable
-              className="flex-row items-center justify-center rounded-xl bg-green-500 py-4"
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                backgroundColor: colors.statusOkBg, borderWidth: 0.5, borderColor: colors.statusOkBorder,
+                borderRadius: Radius.icon, paddingVertical: 14, marginHorizontal: Spacing.md, gap: 8,
+              }}
               onPress={handleComplete}
             >
-              <MaterialIcons name="check-circle" size={20} color="#fff" />
-              <Text className="ml-2 text-base font-semibold text-white">
-                Mark Complete
-              </Text>
-            </Pressable>
+              <Ionicons name="checkmark-circle" size={20} color={colors.statusOk} />
+              <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.statusOk }}>Mark Complete</Text>
+            </TouchableOpacity>
           )}
 
           {project.status === 'completed' && (
-            <View className="flex-row items-center justify-center rounded-xl bg-green-100 py-4 dark:bg-green-900/30">
-              <MaterialIcons name="celebration" size={20} color="#22c55e" />
-              <Text className="ml-2 text-base font-semibold text-green-700 dark:text-green-400">
-                Build Complete!
-              </Text>
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: colors.statusOkBg, borderRadius: Radius.icon,
+              paddingVertical: 14, marginHorizontal: Spacing.md, gap: 8,
+            }}>
+              <Ionicons name="trophy-outline" size={20} color={colors.statusOk} />
+              <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.statusOk }}>Build Complete!</Text>
             </View>
           )}
         </View>
       </ScrollView>
-    </View>
+    </ScreenLayout>
   );
 }

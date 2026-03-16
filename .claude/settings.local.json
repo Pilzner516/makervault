@@ -9,7 +9,13 @@
       "Bash(tasklist:*)",
       "Bash(npx eas:*)",
       "WebFetch(domain:job-logs.eascdn.net)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(curl:*)",
+      "Bash(head:*)",
+      "Bash(npm ls:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(npx supabase:*)"
     ]
   }
 }

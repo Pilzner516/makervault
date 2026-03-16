@@ -1,9 +1,16 @@
-import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
+import {
+  ScreenLayout, ScreenHeader, ModeButton,
+  EngravingLabel, ProjectCard, EmptyState,
+  PrimaryButton, Badge, PanelCard,
+  Spacing, FontSize, Radius,
+} from '@/components/UIKit';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { generateProjectIdeas, searchInstructables } from '@/lib/projectEngine';
@@ -13,6 +20,7 @@ import type { Project } from '@/lib/types';
 export default function ProjectsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { parts } = useInventoryStore();
 
   const [aiSuggestions, setAiSuggestions] = useState<AIProjectSuggestion[]>([]);
@@ -102,229 +110,298 @@ export default function ProjectsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-screen" style={{ paddingTop: insets.top }}>
-      {/* Header */}
-      <View className="px-md pb-sm pt-xl">
-        <Text className="text-title text-text-primary">Projects</Text>
-      </View>
+    <ScreenLayout style={{ paddingTop: insets.top }}>
+      <ScreenHeader
+        title="Projects"
+        subtitle={`${savedProjects.length} saved \u00B7 ${activeProjects.length} active`}
+      />
 
-      {/* Tab bar */}
-      <View className="mx-md mb-sm flex-row gap-[5px]">
-        {(['ideas', 'saved', 'history'] as const).map((tab) => {
-          const isActive = activeTab === tab;
-          return (
-            <Pressable
-              key={tab}
-              className="flex-1 items-center rounded-md py-[6px]"
-              style={{
-                backgroundColor: isActive ? 'rgba(240,160,48,0.12)' : '#1e1e1e',
-                borderWidth: 0.5,
-                borderColor: isActive ? '#634010' : '#2a2a2a',
-              }}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text
-                className="text-meta font-medium capitalize"
-                style={{ color: isActive ? '#f0a030' : '#666666' }}
-              >
-                {tab}
-              </Text>
-            </Pressable>
-          );
-        })}
+      {/* Tab bar — compact row */}
+      <View style={{ flexDirection: 'row', marginHorizontal: 12, marginBottom: 8, gap: 6 }}>
+        {(['ideas', 'saved', 'history'] as const).map((tab) => (
+          <ModeButton
+            key={tab}
+            label={tab.charAt(0).toUpperCase() + tab.slice(1)}
+            active={activeTab === tab}
+            onPress={() => setActiveTab(tab)}
+          />
+        ))}
       </View>
 
       {activeTab === 'ideas' && (
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
           {/* AI suggestions */}
-          <Text className="text-section uppercase px-md py-[6px] text-text-ghost tracking-wider">
-            AI SUGGESTIONS
-          </Text>
+          <EngravingLabel label="AI suggestions" />
 
           {isLoadingAI ? (
-            <View className="items-center py-xl">
-              <ActivityIndicator size="small" color="#f0a030" />
-              <Text className="mt-sm text-meta text-text-faint">Analyzing your inventory...</Text>
+            <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, marginTop: Spacing.sm }}>
+                Analyzing your inventory...
+              </Text>
             </View>
           ) : aiSuggestions.length === 0 ? (
-            <View className="mx-md items-center rounded-lg bg-card py-xl" style={{ borderWidth: 0.5, borderColor: '#2a2a2a' }}>
-              <MaterialIcons name="lightbulb-outline" size={36} color="#555555" />
-              <Text className="mt-sm text-item text-text-ghost">
-                {parts.length === 0 ? 'Add parts to get project ideas' : 'No matching ideas'}
-              </Text>
-              {parts.length > 0 && (
-                <Pressable
-                  className="mt-sm rounded-md px-lg py-[6px]"
-                  style={{ backgroundColor: 'rgba(240,160,48,0.12)', borderWidth: 0.5, borderColor: '#634010' }}
-                  onPress={handleGenerateIdeas}
-                >
-                  <Text className="text-meta font-medium text-amber-500">Regenerate</Text>
-                </Pressable>
-              )}
-            </View>
+            <EmptyState
+              icon="sparkles"
+              title={parts.length === 0 ? 'Add parts to get project ideas' : 'No matching ideas'}
+              actionLabel={parts.length > 0 ? 'Regenerate' : undefined}
+              onAction={parts.length > 0 ? handleGenerateIdeas : undefined}
+            />
           ) : (
-            aiSuggestions.map((suggestion, i) => (
-              <ProjectCard key={`ai-${i}`} suggestion={suggestion} onSave={() => handleSaveProject(suggestion)} />
-            ))
+            aiSuggestions.map((suggestion, i) => {
+              const ownedCount = suggestion.parts_needed.filter((p) => p.user_has).length;
+              const totalCount = suggestion.parts_needed.length;
+              return (
+                <AIProjectCardView
+                  key={`ai-${i}`}
+                  suggestion={suggestion}
+                  ownedCount={ownedCount}
+                  totalCount={totalCount}
+                  onSave={() => handleSaveProject(suggestion)}
+                />
+              );
+            })
           )}
 
           {/* External projects */}
-          <Text className="text-section uppercase px-md py-[6px] mt-lg text-text-ghost tracking-wider">
-            FROM INSTRUCTABLES
-          </Text>
+          <EngravingLabel label="From Instructables" />
 
           {isLoadingExternal ? (
-            <ActivityIndicator className="py-lg" size="small" color="#f0a030" />
+            <View style={{ paddingVertical: Spacing.lg }}>
+              <ActivityIndicator size="small" color={colors.accent} />
+            </View>
           ) : externalProjects.length === 0 ? (
-            <Text className="mx-md text-meta text-text-ghost">No results</Text>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, paddingHorizontal: Spacing.md }}>
+              No results
+            </Text>
           ) : (
-            externalProjects.map((proj, i) => (
-              <Pressable
-                key={`ext-${i}`}
-                className="flex-row items-center px-md py-sm"
-                style={{ borderBottomWidth: 0.5, borderBottomColor: '#1e1e1e' }}
-                onPress={() => WebBrowser.openBrowserAsync(proj.url)}
-              >
-                <View className="flex-1">
-                  <Text className="text-item text-text-secondary">{proj.title}</Text>
-                  {proj.description && (
-                    <Text className="text-meta text-text-muted" numberOfLines={1}>{proj.description}</Text>
-                  )}
-                </View>
-                <MaterialIcons name="open-in-new" size={14} color="#f0a030" />
-              </Pressable>
-            ))
+            <PanelCard>
+              {externalProjects.map((proj, i) => (
+                <TouchableOpacity
+                  key={`ext-${i}`}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: 13,
+                    backgroundColor: colors.bgRow,
+                    gap: Spacing.sm,
+                    ...(i < externalProjects.length - 1
+                      ? { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }
+                      : {}),
+                  }}
+                  onPress={() => WebBrowser.openBrowserAsync(proj.url)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textSecondary }} numberOfLines={1}>
+                      {proj.title}
+                    </Text>
+                    {proj.description && (
+                      <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, marginTop: 2 }} numberOfLines={1}>
+                        {proj.description}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="open-outline" size={16} color={colors.accent} />
+                </TouchableOpacity>
+              ))}
+            </PanelCard>
           )}
         </ScrollView>
       )}
 
       {activeTab === 'saved' && (
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24, paddingTop: Spacing.sm }}>
           {activeProjects.length === 0 ? (
-            <View className="items-center py-xl">
-              <MaterialIcons name="bookmark-outline" size={36} color="#555555" />
-              <Text className="mt-sm text-item text-text-ghost">No saved projects</Text>
-            </View>
+            <EmptyState
+              icon="bookmark-outline"
+              title="No saved projects"
+              subtitle="Save an AI suggestion or create a project to get started"
+            />
           ) : (
-            activeProjects.map((project) => (
-              <Pressable
-                key={project.id}
-                className="mx-md mb-[7px] rounded-lg bg-card p-[10px]"
-                style={{ borderWidth: 0.5, borderColor: '#272727' }}
-                onPress={() => router.push(`/project/${project.id}`)}
-              >
-                <View className="flex-row items-start justify-between">
-                  <Text className="text-item text-text-secondary flex-1 mr-sm">{project.title}</Text>
-                  <DifficultyBadge difficulty={project.difficulty} />
-                </View>
-                {project.description && (
-                  <Text className="text-meta text-text-faint mt-xs" numberOfLines={2}>{project.description}</Text>
-                )}
-                <View className="mt-[7px] h-[3px] rounded-sm bg-elevated overflow-hidden">
-                  <View
-                    className="h-full rounded-sm"
-                    style={{
-                      width: project.status === 'completed' ? '100%' : project.status === 'in_progress' ? '50%' : '0%',
-                      backgroundColor: project.status === 'completed' ? '#32b464' : '#f0a030',
-                    }}
-                  />
-                </View>
-              </Pressable>
-            ))
+            activeProjects.map((project) => {
+              const pct = project.status === 'completed' ? 1 : project.status === 'in_progress' ? 0.5 : 0;
+              return (
+                <TouchableOpacity
+                  key={project.id}
+                  activeOpacity={0.75}
+                  style={{
+                    backgroundColor: colors.bgCard,
+                    borderWidth: 1,
+                    borderColor: colors.borderDefault,
+                    borderRadius: Radius.card,
+                    marginHorizontal: Spacing.md,
+                    marginBottom: Spacing.sm,
+                    padding: Spacing.md,
+                  }}
+                  onPress={() => router.push(`/project/${project.id}`)}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textSecondary, flex: 1, marginRight: Spacing.sm }} numberOfLines={1}>
+                      {project.title}
+                    </Text>
+                    <DifficultyBadge difficulty={project.difficulty} />
+                  </View>
+                  {project.description && (
+                    <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, marginBottom: Spacing.sm }} numberOfLines={2}>
+                      {project.description}
+                    </Text>
+                  )}
+                  <View style={{ height: 4, backgroundColor: colors.bgRow, borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
+                    <View
+                      style={{
+                        height: '100%',
+                        borderRadius: 2,
+                        width: `${Math.round(pct * 100)}%` as unknown as number,
+                        backgroundColor: project.status === 'completed' ? colors.statusOk : colors.accent,
+                      }}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
         </ScrollView>
       )}
 
       {activeTab === 'history' && (
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24, paddingTop: Spacing.sm }}>
           {completedProjects.length === 0 ? (
-            <View className="items-center py-xl">
-              <MaterialIcons name="check-circle-outline" size={36} color="#555555" />
-              <Text className="mt-sm text-item text-text-ghost">No completed builds yet</Text>
-            </View>
+            <EmptyState
+              icon="checkmark-circle-outline"
+              title="No completed builds yet"
+              subtitle="Complete a project build to see it here"
+            />
           ) : (
-            completedProjects.map((project) => (
-              <Pressable
-                key={project.id}
-                className="flex-row items-center px-md py-sm"
-                style={{ borderBottomWidth: 0.5, borderBottomColor: '#1e1e1e' }}
-                onPress={() => router.push(`/project/${project.id}`)}
-              >
-                <MaterialIcons name="check-circle" size={18} color="#32b464" />
-                <View className="ml-sm flex-1">
-                  <Text className="text-item text-text-secondary">{project.title}</Text>
-                  <Text className="text-meta text-text-muted">
-                    {new Date(project.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <DifficultyBadge difficulty={project.difficulty} />
-              </Pressable>
-            ))
+            <PanelCard>
+              {completedProjects.map((project, i) => (
+                <TouchableOpacity
+                  key={project.id}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: 13,
+                    backgroundColor: colors.bgRow,
+                    ...(i < completedProjects.length - 1
+                      ? { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }
+                      : {}),
+                  }}
+                  onPress={() => router.push(`/project/${project.id}`)}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color={colors.statusOk} />
+                  <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textSecondary }}>
+                      {project.title}
+                    </Text>
+                    <Text style={{ fontSize: FontSize.sm, color: colors.textMuted, marginTop: 2 }}>
+                      {new Date(project.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <DifficultyBadge difficulty={project.difficulty} />
+                </TouchableOpacity>
+              ))}
+            </PanelCard>
           )}
         </ScrollView>
       )}
-    </View>
+    </ScreenLayout>
   );
 }
 
-function ProjectCard({ suggestion, onSave }: { suggestion: AIProjectSuggestion; onSave: () => void }) {
-  const ownedCount = suggestion.parts_needed.filter((p) => p.user_has).length;
-  const totalCount = suggestion.parts_needed.length;
+function AIProjectCardView({
+  suggestion,
+  ownedCount,
+  totalCount,
+  onSave,
+}: {
+  suggestion: AIProjectSuggestion;
+  ownedCount: number;
+  totalCount: number;
+  onSave: () => void;
+}) {
+  const { colors } = useTheme();
   const matchPct = totalCount > 0 ? Math.round((ownedCount / totalCount) * 100) : 0;
+  const progressColor = matchPct >= 80 ? colors.statusOk : matchPct >= 50 ? colors.accent : colors.statusOut;
 
   return (
-    <View
-      className="mx-md mb-[7px] rounded-lg bg-card p-[10px]"
-      style={{ borderWidth: 0.5, borderColor: '#272727' }}
-    >
-      <View className="flex-row items-start justify-between">
-        <Text className="text-item text-text-secondary flex-1 mr-sm">{suggestion.title}</Text>
+    <View style={{
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.borderDefault,
+      borderRadius: Radius.card,
+      marginHorizontal: Spacing.md,
+      marginBottom: Spacing.sm,
+      padding: Spacing.md,
+    }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textSecondary, flex: 1, marginRight: Spacing.sm }} numberOfLines={1}>
+          {suggestion.title}
+        </Text>
         <DifficultyBadge difficulty={suggestion.difficulty} />
       </View>
-      <Text className="text-meta text-text-faint mt-xs" numberOfLines={2}>{suggestion.description}</Text>
+      <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, marginBottom: Spacing.sm }} numberOfLines={2}>
+        {suggestion.description}
+      </Text>
 
-      <View className="mt-sm flex-row items-center gap-sm">
-        <Text className="text-meta text-text-muted">{suggestion.estimated_hours}h</Text>
-        <View className="rounded-sm px-[6px] py-[2px]" style={{ backgroundColor: 'rgba(50,180,100,0.10)' }}>
-          <Text className="text-badge" style={{ color: matchPct >= 80 ? '#32b464' : matchPct >= 50 ? '#f0a030' : '#888888' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm }}>
+        <Text style={{ fontSize: FontSize.sm, color: colors.textMuted }}>{suggestion.estimated_hours}h</Text>
+        <View style={{ backgroundColor: colors.statusOkBg, borderRadius: Radius.badge, paddingHorizontal: 6, paddingVertical: 2 }}>
+          <Text style={{
+            fontSize: FontSize.xs,
+            fontWeight: '600',
+            color: matchPct >= 80 ? colors.statusOk : matchPct >= 50 ? colors.accent : colors.textMuted,
+          }}>
             {ownedCount}/{totalCount} parts
           </Text>
         </View>
       </View>
 
       {/* Progress bar */}
-      <View className="mt-[7px] h-[3px] rounded-sm bg-elevated overflow-hidden">
+      <View style={{ height: 4, backgroundColor: colors.bgRow, borderRadius: 2, overflow: 'hidden', marginTop: 2 }}>
         <View
-          className="h-full rounded-sm"
           style={{
-            width: `${matchPct}%`,
-            backgroundColor: matchPct >= 80 ? '#32b464' : matchPct >= 50 ? '#f0a030' : '#f05032',
+            height: '100%',
+            borderRadius: 2,
+            width: `${matchPct}%` as unknown as number,
+            backgroundColor: progressColor,
           }}
         />
       </View>
 
-      <Pressable
-        className="mt-sm rounded-md py-[9px] items-center"
-        style={{ backgroundColor: 'rgba(240,160,48,0.12)', borderWidth: 0.5, borderColor: '#634010' }}
+      <TouchableOpacity
+        activeOpacity={0.75}
+        style={{
+          backgroundColor: colors.accentBg,
+          borderWidth: 0.5,
+          borderColor: colors.accentBorder,
+          borderRadius: Radius.icon,
+          paddingVertical: 10,
+          alignItems: 'center',
+          marginTop: Spacing.sm,
+        }}
         onPress={onSave}
       >
-        <Text className="text-input font-medium text-amber-500">Save & View Details</Text>
-      </Pressable>
+        <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.accent }}>Save & View Details</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 function DifficultyBadge({ difficulty }: { difficulty: string | null }) {
+  const { colors } = useTheme();
   if (!difficulty) return null;
   const config: Record<string, { bg: string; color: string }> = {
-    beginner: { bg: 'rgba(50,180,100,0.10)', color: '#32b464' },
-    intermediate: { bg: 'rgba(240,160,48,0.12)', color: '#f0a030' },
-    advanced: { bg: 'rgba(240,80,50,0.13)', color: '#f05032' },
+    beginner: { bg: colors.statusOkBg, color: colors.statusOk },
+    intermediate: { bg: colors.statusLowBg, color: colors.statusLow },
+    advanced: { bg: colors.statusOutBg, color: colors.statusOut },
   };
-  const { bg, color } = config[difficulty] ?? { bg: '#252525', color: '#888888' };
+  const { bg, color } = config[difficulty] ?? { bg: colors.bgSurface, color: colors.textMuted };
   return (
-    <View className="rounded-sm px-[6px] py-[2px]" style={{ backgroundColor: bg }}>
-      <Text className="text-badge capitalize" style={{ color }}>{difficulty}</Text>
+    <View style={{ backgroundColor: bg, borderRadius: Radius.badge, paddingHorizontal: 8, paddingVertical: 4 }}>
+      <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color, textTransform: 'capitalize' }}>{difficulty}</Text>
     </View>
   );
 }

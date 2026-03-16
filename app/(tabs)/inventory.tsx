@@ -1,8 +1,15 @@
-import { View, Text, TextInput, Pressable, Modal, Alert, FlatList, ActivityIndicator } from 'react-native';
+import { View, Modal, Alert, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  ScreenLayout, ScreenHeader, SearchBar,
+  FilterPillRow, FilterPill, EngravingLabel,
+  PanelCard, ItemRow, EmptyState,
+  Spacing, Radius,
+} from '@/components/UIKit';
+import { useTheme } from '@/context/ThemeContext';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { getLowStockParts } from '@/lib/notifications';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -12,9 +19,23 @@ import type { Part, NewPart } from '@/lib/types';
 type SortKey = 'name' | 'category' | 'quantity' | 'updated_at';
 type FilterKey = 'all' | 'low_stock' | string;
 
+function getAbbr(text: string): string {
+  const abbrs: Record<string, string> = {
+    resistor: 'RES', capacitor: 'CAP', inductor: 'IND', led: 'LED',
+    transistor: 'TRN', diode: 'DIO', ic: 'IC', microcontroller: 'MCU',
+    sensor: 'SNS', motor: 'MOT', cable: 'CBL', connector: 'CON',
+  };
+  const lower = text.toLowerCase();
+  for (const [key, val] of Object.entries(abbrs)) {
+    if (lower.includes(key)) return val;
+  }
+  return text.slice(0, 3).toUpperCase();
+}
+
 export default function InventoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { parts, isLoading, fetchParts, addPart, deletePart } = useInventoryStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -33,6 +54,11 @@ export default function InventoryScreen() {
   }, [parts]);
 
   const lowStockCount = useMemo(() => getLowStockParts(parts).length, [parts]);
+
+  const uniqueLocations = useMemo(() => {
+    const locs = new Set(parts.map((p) => p.category).filter(Boolean));
+    return locs.size;
+  }, [parts]);
 
   const filteredParts = useMemo(() => {
     let result = [...parts];
@@ -79,122 +105,80 @@ export default function InventoryScreen() {
     [addPart]
   );
 
+  const filterKeys: FilterKey[] = useMemo(() => {
+    const keys: FilterKey[] = ['all'];
+    if (lowStockCount > 0) keys.push('low_stock');
+    keys.push(...categories);
+    return keys;
+  }, [lowStockCount, categories]);
+
+  const getFilterLabel = (key: FilterKey): string => {
+    if (key === 'all') return 'All';
+    if (key === 'low_stock') return `Low (${lowStockCount})`;
+    return key;
+  };
+
   const renderItem = useCallback(
-    ({ item }: { item: Part }) => (
-      <Pressable
-        className="flex-row items-center px-md py-sm"
-        style={{ borderBottomWidth: 0.5, borderBottomColor: '#1e1e1e' }}
-        onPress={() => router.push(`/part/${item.id}`)}
-      >
-        <View
-          className="h-[28px] w-[28px] items-center justify-center rounded-md bg-surface"
-          style={{ borderWidth: 0.5, borderColor: '#2e2e2e' }}
-        >
-          <Text className="text-[10px] font-medium text-text-muted">
-            {getAbbr(item.category ?? item.name)}
-          </Text>
-        </View>
-        <View className="ml-sm flex-1">
-          <Text className="text-item text-text-secondary" numberOfLines={1}>{item.name}</Text>
-          <Text className="text-meta text-text-muted" numberOfLines={1}>
-            {[item.manufacturer, item.mpn].filter(Boolean).join(' · ') || item.category || ''}
-          </Text>
-        </View>
-        <View className="items-end">
-          {item.quantity <= item.low_stock_threshold ? (
-            <View
-              className="rounded-sm px-[6px] py-[2px]"
-              style={{
-                backgroundColor: item.quantity === 0 ? 'rgba(240,80,50,0.13)' : 'rgba(240,160,48,0.12)',
-              }}
-            >
-              <Text
-                className="text-badge"
-                style={{ color: item.quantity === 0 ? '#f05032' : '#f0a030' }}
-              >
-                {item.quantity === 0 ? 'OUT' : `${item.quantity}`}
-              </Text>
-            </View>
-          ) : (
-            <Text className="text-item text-text-muted">{item.quantity}</Text>
-          )}
-        </View>
-      </Pressable>
-    ),
+    ({ item }: { item: Part }) => {
+      const badge: 'ok' | 'low' | 'out' | undefined =
+        item.quantity === 0 ? 'out' : item.quantity <= item.low_stock_threshold ? 'low' : undefined;
+      const badgeLabel =
+        item.quantity === 0 ? undefined : item.quantity <= item.low_stock_threshold ? `${item.quantity} left` : undefined;
+
+      return (
+        <ItemRow
+          iconLabel={getAbbr(item.category ?? item.name)}
+          imageUri={item.image_url ?? undefined}
+          name={item.name}
+          meta={[item.manufacturer, item.mpn].filter(Boolean).join(' \u00B7 ') || item.category || undefined}
+          badge={badge}
+          badgeLabel={badgeLabel}
+          rightText={!badge ? String(item.quantity) : undefined}
+          status="none"
+          onPress={() => router.push(`/part/${item.id}`)}
+        />
+      );
+    },
     [router]
   );
 
   return (
-    <View className="flex-1 bg-screen" style={{ paddingTop: insets.top }}>
-      {/* Header */}
-      <View className="px-md pb-sm pt-xl">
-        <Text className="text-title text-text-primary">Inventory</Text>
-      </View>
-
-      {/* Search bar */}
-      <View
-        className="mx-md mb-sm flex-row items-center rounded-md px-[10px]"
-        style={{ backgroundColor: '#1a1a1a', borderWidth: 0.5, borderColor: '#2a2a2a' }}
-      >
-        <MaterialIcons name="search" size={16} color="#444444" />
-        <TextInput
-          className="ml-sm flex-1 py-[6px] text-field text-text-secondary"
-          placeholder="Search parts..."
-          placeholderTextColor="#555555"
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-        />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch('')}>
-            <MaterialIcons name="close" size={14} color="#666666" />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Filter pills */}
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={['all', ...(lowStockCount > 0 ? ['low_stock'] : []), ...categories] as FilterKey[]}
-        keyExtractor={(item) => item}
-        contentContainerStyle={{ paddingHorizontal: 12, gap: 6, marginBottom: 8 }}
-        renderItem={({ item: cat }) => {
-          const isActive = filter === cat;
-          const isLow = cat === 'low_stock';
-          return (
-            <Pressable
-              className="rounded-pill px-[7px] py-[2px]"
-              style={{
-                backgroundColor: isActive ? 'rgba(240,160,48,0.12)' : '#1e1e1e',
-                borderWidth: 0.5,
-                borderColor: isActive ? '#634010' : '#2a2a2a',
-              }}
-              onPress={() => setFilter(isActive ? 'all' : cat)}
-            >
-              <Text
-                className="text-meta font-medium"
-                style={{ color: isActive ? '#f0a030' : '#666666' }}
-              >
-                {cat === 'all' ? 'All' : isLow ? `Low (${lowStockCount})` : cat}
-              </Text>
-            </Pressable>
-          );
-        }}
+    <ScreenLayout style={{ paddingTop: insets.top }}>
+      <ScreenHeader
+        title="Inventory"
+        subtitle={`${parts.length} items \u00B7 ${categories.length} categories`}
+        rightElement={
+          <TouchableOpacity onPress={() => setShowAddSheet(true)} activeOpacity={0.7}>
+            <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
+          </TouchableOpacity>
+        }
       />
+
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search parts\u2026" />
+
+      <FilterPillRow>
+        {filterKeys.map((key) => (
+          <FilterPill
+            key={key}
+            label={getFilterLabel(key)}
+            active={filter === key}
+            onPress={() => setFilter(filter === key ? 'all' : key)}
+          />
+        ))}
+      </FilterPillRow>
 
       {/* Loading */}
       {isLoading && (
-        <View className="items-center py-xl">
-          <ActivityIndicator size="small" color="#f0a030" />
+        <View style={{ alignItems: 'center', paddingVertical: Spacing.xl }}>
+          <ActivityIndicator size="small" color={colors.accent} />
         </View>
       )}
 
       {/* Section label */}
       {!isLoading && filteredParts.length > 0 && (
-        <Text className="text-section uppercase px-md pb-[3px] text-text-ghost tracking-wider">
-          {filter === 'low_stock' ? 'LOW STOCK' : filter !== 'all' ? filter.toUpperCase() : 'ALL PARTS'} · {filteredParts.length} ITEMS
-        </Text>
+        <EngravingLabel
+          label={`${filter === 'low_stock' ? 'Low stock' : filter !== 'all' ? filter : 'All parts'} \u00B7 ${filteredParts.length} items`}
+        />
       )}
 
       {/* Part list */}
@@ -207,33 +191,37 @@ export default function InventoryScreen() {
         refreshing={isLoading}
         ListEmptyComponent={
           !isLoading ? (
-            <View className="items-center py-xl px-lg">
-              <MaterialIcons name="inventory" size={36} color="#555555" />
-              <Text className="mt-sm text-item text-text-ghost">
-                {search ? `No parts match "${search}"` : 'No parts yet'}
-              </Text>
-              {!search && (
-                <Pressable
-                  className="mt-lg rounded-md px-lg py-[9px]"
-                  style={{ backgroundColor: 'rgba(240,160,48,0.12)', borderWidth: 0.5, borderColor: '#634010' }}
-                  onPress={() => setShowAddSheet(true)}
-                >
-                  <Text className="text-input font-medium text-amber-500">Add Your First Part</Text>
-                </Pressable>
-              )}
-            </View>
+            <EmptyState
+              icon="cube-outline"
+              title={search ? `No parts match "${search}"` : 'No parts yet'}
+              subtitle={!search ? 'Scan a component or add parts manually' : undefined}
+              actionLabel={!search ? 'Add Your First Part' : undefined}
+              onAction={!search ? () => setShowAddSheet(true) : undefined}
+            />
           ) : null
         }
       />
 
       {/* FAB */}
-      <Pressable
-        className="absolute bottom-6 right-4 h-12 w-12 items-center justify-center rounded-pill"
-        style={{ backgroundColor: 'rgba(240,160,48,0.12)', borderWidth: 0.5, borderColor: '#634010' }}
+      <TouchableOpacity
+        activeOpacity={0.75}
+        style={{
+          position: 'absolute',
+          bottom: insets.bottom + 16,
+          right: 16,
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: colors.accentBg,
+          borderWidth: 0.5,
+          borderColor: colors.accentBorder,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
         onPress={() => setShowAddSheet(true)}
       >
-        <MaterialIcons name="add" size={24} color="#f0a030" />
-      </Pressable>
+        <Ionicons name="add" size={24} color={colors.accent} />
+      </TouchableOpacity>
 
       {/* Add Part Sheet */}
       <Modal
@@ -244,19 +232,6 @@ export default function InventoryScreen() {
       >
         <AddPartSheet onSubmit={handleAddPart} onClose={() => setShowAddSheet(false)} />
       </Modal>
-    </View>
+    </ScreenLayout>
   );
-}
-
-function getAbbr(text: string): string {
-  const abbrs: Record<string, string> = {
-    resistor: 'RES', capacitor: 'CAP', inductor: 'IND', led: 'LED',
-    transistor: 'TRN', diode: 'DIO', ic: 'IC', microcontroller: 'MCU',
-    sensor: 'SNS', motor: 'MOT', cable: 'CBL', connector: 'CON',
-  };
-  const lower = text.toLowerCase();
-  for (const [key, val] of Object.entries(abbrs)) {
-    if (lower.includes(key)) return val;
-  }
-  return text.slice(0, 3).toUpperCase();
 }

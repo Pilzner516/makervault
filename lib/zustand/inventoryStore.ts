@@ -18,18 +18,20 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
 
   fetchParts: async () => {
     set({ isLoading: true });
-    const { data, error } = await supabase
-      .from('parts')
-      .select('*')
-      .order('updated_at', { ascending: false });
+    const { data: { user } } = await supabase.auth.getUser();
+    let query = supabase.from('parts').select('*');
+    if (user) query = query.eq('user_id', user.id);
+    const { data, error } = await query.order('updated_at', { ascending: false });
     if (error) throw error;
     set({ parts: data as Part[], isLoading: false });
   },
 
   addPart: async (part) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not signed in');
     const { data, error } = await supabase
       .from('parts')
-      .insert(part)
+      .insert({ ...part, user_id: user.id })
       .select()
       .single();
     if (error) throw error;
@@ -37,12 +39,13 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   },
 
   updatePart: async (id, updates) => {
-    const { data, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    let query = supabase
       .from('parts')
       .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+      .eq('id', id);
+    if (user) query = query.eq('user_id', user.id);
+    const { data, error } = await query.select().single();
     if (error) throw error;
     set({
       parts: get().parts.map((p) => (p.id === id ? (data as Part) : p)),
@@ -50,7 +53,10 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   },
 
   deletePart: async (id) => {
-    const { error } = await supabase.from('parts').delete().eq('id', id);
+    const { data: { user } } = await supabase.auth.getUser();
+    let query = supabase.from('parts').delete().eq('id', id);
+    if (user) query = query.eq('user_id', user.id);
+    const { error } = await query;
     if (error) throw error;
     set({ parts: get().parts.filter((p) => p.id !== id) });
   },

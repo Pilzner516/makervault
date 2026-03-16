@@ -1,25 +1,68 @@
-import { View, Text, ScrollView, Pressable, Switch, Alert } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, ScrollView, TouchableOpacity, Switch, TextInput } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
+import { Alert } from 'react-native';
+import {
+  ScreenLayout, ScreenHeader,
+  EngravingLabel, FieldRow, PanelCard,
+  PrimaryButton,
+  Spacing, FontSize, Radius,
+} from '@/components/UIKit';
+import { useTheme } from '@/context/ThemeContext';
+import { ThemePicker } from '@/components/ThemePicker';
 import { useAuthStore } from '@/lib/zustand/authStore';
+import { useSettingsStore, SCAN_QUALITY_PRESETS } from '@/lib/zustand/settingsStore';
+import { useSupplierStore } from '@/lib/zustand/supplierStore';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { requestNotificationPermissions } from '@/lib/notifications';
-import { useState } from 'react';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { colors } = useTheme();
   const { user, signOut } = useAuthStore();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const {
+    lowStockAlertsEnabled,
+    voiceEnabled,
+    hapticFeedbackEnabled,
+    setLowStockAlerts,
+    setVoiceEnabled,
+    setHapticFeedback,
+    scanQuality,
+    setScanQuality,
+    init: initSettings,
+  } = useSettingsStore();
+  const {
+    userSettings, favourites, fetchAll: fetchSuppliers,
+    setCountry, setShowGlobal, setAffiliateCode, toggleFavourite,
+  } = useSupplierStore();
 
-  const handleNotificationToggle = async (value: boolean) => {
-    if (value) {
-      const granted = await requestNotificationPermissions();
-      setNotificationsEnabled(granted);
-    } else {
-      setNotificationsEnabled(false);
+  const [amazonTag, setAmazonTag] = useState(userSettings?.amazon_affiliate_tag ?? '');
+  const [jamecoId, setJamecoId] = useState(userSettings?.jameco_avantlink_id ?? '');
+  const [hdId, setHdId] = useState(userSettings?.home_depot_impact_id ?? '');
+
+  useEffect(() => {
+    initSettings();
+    fetchSuppliers().catch(() => {});
+  }, [initSettings, fetchSuppliers]);
+
+  useEffect(() => {
+    if (userSettings) {
+      setAmazonTag(userSettings.amazon_affiliate_tag ?? '');
+      setJamecoId(userSettings.jameco_avantlink_id ?? '');
+      setHdId(userSettings.home_depot_impact_id ?? '');
     }
-  };
+  }, [userSettings]);
+
+  const favList = favourites();
+  const countries = [
+    { code: 'US', label: '🇺🇸 United States' },
+    { code: 'UK', label: '🇬🇧 United Kingdom' },
+    { code: 'CA', label: '🇨🇦 Canada' },
+    { code: 'AU', label: '🇦🇺 Australia' },
+    { code: 'GLOBAL', label: '🌍 Global' },
+  ];
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure?', [
@@ -29,82 +72,323 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-screen">
-      <Stack.Screen options={{ title: 'Settings', headerStyle: { backgroundColor: '#0a0a0a' }, headerTintColor: '#f0ede0' }} />
-      <ScrollView className="flex-1 px-md pt-lg" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+    <ScreenLayout style={{ paddingTop: insets.top }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader title="Settings" />
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+
+        {/* Features */}
+        <EngravingLabel label="Features" />
+        <PanelCard>
+          <ToggleRow
+            icon="notifications-outline"
+            label="Low Stock Alerts"
+            description="Show alerts when items drop below threshold"
+            value={lowStockAlertsEnabled}
+            onValueChange={setLowStockAlerts}
+          />
+          <ToggleRow
+            icon="mic-outline"
+            label="Voice Assistant"
+            description="Enable voice commands via mic button"
+            value={voiceEnabled}
+            onValueChange={setVoiceEnabled}
+          />
+          <ToggleRow
+            icon="hand-left-outline"
+            label="Haptic Feedback"
+            description="Vibrate on button presses and scans"
+            value={hapticFeedbackEnabled}
+            onValueChange={setHapticFeedback}
+            last
+          />
+        </PanelCard>
+
+        {/* Scan Quality */}
+        <EngravingLabel label="Scan Quality" />
+        <PanelCard>
+          {SCAN_QUALITY_PRESETS.map((preset, i) => {
+            const isActive = scanQuality === preset.id;
+            return (
+              <TouchableOpacity
+                key={preset.id}
+                activeOpacity={0.75}
+                style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  paddingHorizontal: Spacing.md, paddingVertical: 12, minHeight: 52,
+                  borderBottomWidth: i < SCAN_QUALITY_PRESETS.length - 1 ? 1 : 0,
+                  borderBottomColor: colors.borderSubtle,
+                  backgroundColor: isActive ? colors.accentBg : undefined,
+                }}
+                onPress={() => setScanQuality(preset.id)}
+              >
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: isActive ? colors.accent : colors.textSecondary }}>
+                      {preset.name}
+                    </Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.statusOk }}>{preset.accuracy}</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textMuted }}>{preset.speed}</Text>
+                  </View>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textMuted }}>{preset.description}</Text>
+                </View>
+                {isActive && <Ionicons name="checkmark-circle" size={20} color={colors.accent} />}
+              </TouchableOpacity>
+            );
+          })}
+        </PanelCard>
+
+        {/* Theme Picker */}
+        <ThemePicker />
+
+        {/* Country / Region */}
+        <EngravingLabel label="Country / Region" />
+        <PanelCard>
+          {countries.map((c, i) => (
+            <TouchableOpacity
+              key={c.code}
+              activeOpacity={0.75}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                paddingHorizontal: Spacing.md, paddingVertical: 13,
+                borderBottomWidth: i < countries.length - 1 ? 1 : 0,
+                borderBottomColor: colors.borderSubtle,
+              }}
+              onPress={() => setCountry(c.code)}
+            >
+              <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>{c.label}</Text>
+              {userSettings?.country_code === c.code && (
+                <Ionicons name="checkmark" size={18} color={colors.accent} />
+              )}
+            </TouchableOpacity>
+          ))}
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            paddingHorizontal: Spacing.md, paddingVertical: 13,
+          }}>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>Show global suppliers</Text>
+            <Switch
+              value={userSettings?.show_global ?? true}
+              onValueChange={setShowGlobal}
+              trackColor={{ true: colors.accent, false: colors.bgElevated }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
+        </PanelCard>
+
+        {/* Affiliate Codes */}
+        <EngravingLabel label="Affiliate Codes" />
+        <PanelCard>
+          <View style={{ paddingHorizontal: Spacing.md, paddingVertical: 10 }}>
+            <Text style={{ fontSize: FontSize.xs, color: colors.textMuted }}>
+              Enter your codes to earn commission when users tap supplier links
+            </Text>
+          </View>
+          <AffiliateRow
+            label="Amazon" sublabel="3-4% · 24hr cookie" logoBg="#FF9900" logoText="#000" logoLabel="AMZ"
+            value={amazonTag} placeholder="yourtag-20"
+            onSave={(v) => { setAmazonTag(v); setAffiliateCode('amazon_affiliate_tag', v); }}
+            colors={colors}
+          />
+          <AffiliateRow
+            label="Jameco" sublabel="5% · 120-day cookie" logoBg="#003366" logoText="#FFF" logoLabel="JAMC"
+            value={jamecoId} placeholder="Publisher ID"
+            onSave={(v) => { setJamecoId(v); setAffiliateCode('jameco_avantlink_id', v); }}
+            colors={colors}
+          />
+          <AffiliateRow
+            label="Home Depot" sublabel="1-8% · 1-day cookie" logoBg="#F96302" logoText="#FFF" logoLabel="HD"
+            value={hdId} placeholder="Impact ID"
+            onSave={(v) => { setHdId(v); setAffiliateCode('home_depot_impact_id', v); }}
+            colors={colors} isLast
+          />
+        </PanelCard>
+
+        {/* Your Favourites */}
+        <EngravingLabel label="Your favourite suppliers" />
+        <PanelCard>
+          {favList.length === 0 ? (
+            <View style={{ paddingHorizontal: Spacing.md, paddingVertical: 16 }}>
+              <Text style={{ fontSize: FontSize.sm, color: colors.textMuted }}>No favourites yet — star suppliers to add them</Text>
+            </View>
+          ) : (
+            favList.map((sup, i) => (
+              <View key={sup.id} style={{
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+                paddingHorizontal: Spacing.md, paddingVertical: 10, minHeight: 48,
+                borderBottomWidth: i < favList.length - 1 ? 1 : 0,
+                borderBottomColor: colors.borderSubtle,
+              }}>
+                <View style={{ width: 44, height: 24, borderRadius: 3, backgroundColor: sup.logo_bg, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: sup.logo_text, letterSpacing: -0.3 }}>{sup.logo_label}</Text>
+                </View>
+                <Text style={{ flex: 1, fontSize: FontSize.sm, fontWeight: '700', color: colors.textSecondary }}>{sup.name}</Text>
+                <TouchableOpacity onPress={() => toggleFavourite(sup.id)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="star" size={18} color="#fcd34d" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+              paddingVertical: 13, borderTopWidth: 1, borderTopColor: colors.borderSubtle,
+            }}
+            onPress={() => router.push({ pathname: '/all-suppliers', params: { itemName: '' } })}
+          >
+            <Text style={{ fontSize: FontSize.sm, color: colors.accent }}>Manage all suppliers</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+          </TouchableOpacity>
+        </PanelCard>
+
         {/* Account */}
-        <Text className="text-section uppercase pb-[3px] text-text-ghost tracking-wider mb-sm">
-          ACCOUNT
-        </Text>
-        <View className="rounded-lg bg-card mb-lg" style={{ borderWidth: 0.5, borderColor: '#2a2a2a' }}>
+        <EngravingLabel label="Account" />
+        <PanelCard>
           {user ? (
             <>
-              <View className="flex-row items-center px-md py-sm" style={{ borderBottomWidth: 0.5, borderBottomColor: '#1e1e1e' }}>
-                <MaterialIcons name="person" size={18} color="#f0a030" />
-                <View className="ml-sm">
-                  <Text className="text-item text-text-secondary">{user.email}</Text>
-                  <Text className="text-meta text-text-muted">Signed in</Text>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                paddingHorizontal: Spacing.md, paddingVertical: 13,
+                backgroundColor: colors.bgRow,
+                borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle,
+              }}>
+                <Ionicons name="person" size={18} color={colors.accent} />
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>
+                    {user.email ?? 'Anonymous user'}
+                  </Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: 1 }}>Signed in</Text>
                 </View>
               </View>
-              <Pressable className="flex-row items-center px-md py-sm" onPress={handleSignOut}>
-                <MaterialIcons name="logout" size={18} color="#f05032" />
-                <Text className="ml-sm text-item text-status-out">Sign Out</Text>
-              </Pressable>
+              {user.email && (
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    paddingHorizontal: Spacing.md, paddingVertical: 13,
+                    backgroundColor: colors.bgRow, gap: Spacing.sm,
+                  }}
+                  onPress={handleSignOut}
+                >
+                  <Ionicons name="log-out-outline" size={18} color={colors.statusOut} />
+                  <Text style={{ fontSize: FontSize.sm, color: colors.statusOut }}>Sign Out</Text>
+                </TouchableOpacity>
+              )}
             </>
           ) : (
-            <View className="flex-row items-center px-md py-sm">
-              <MaterialIcons name="person-outline" size={18} color="#666666" />
-              <View className="ml-sm">
-                <Text className="text-item text-text-secondary">Not signed in</Text>
-                <Text className="text-meta text-text-muted">
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              paddingHorizontal: Spacing.md, paddingVertical: 13,
+              backgroundColor: colors.bgRow,
+            }}>
+              <Ionicons name="person-outline" size={18} color={colors.textFaint} />
+              <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>Not signed in</Text>
+                <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: 1 }}>
                   {isSupabaseConfigured() ? 'Sign in to sync across devices' : 'Configure Supabase to enable sync'}
                 </Text>
               </View>
             </View>
           )}
-        </View>
-
-        {/* Notifications */}
-        <Text className="text-section uppercase pb-[3px] text-text-ghost tracking-wider mb-sm">
-          NOTIFICATIONS
-        </Text>
-        <View className="rounded-lg bg-card mb-lg" style={{ borderWidth: 0.5, borderColor: '#2a2a2a' }}>
-          <View className="flex-row items-center justify-between px-md py-sm">
-            <View className="flex-row items-center">
-              <MaterialIcons name="notifications-none" size={18} color="#888888" />
-              <Text className="ml-sm text-item text-text-secondary">Low Stock Alerts</Text>
-            </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={handleNotificationToggle}
-              trackColor={{ true: '#f0a030', false: '#2e2e2e' }}
-              thumbColor="#f0ede0"
-            />
-          </View>
-        </View>
+        </PanelCard>
 
         {/* About */}
-        <Text className="text-section uppercase pb-[3px] text-text-ghost tracking-wider mb-sm">
-          ABOUT
-        </Text>
-        <View className="rounded-lg bg-card mb-lg" style={{ borderWidth: 0.5, borderColor: '#2a2a2a' }}>
+        <EngravingLabel label="About" />
+        <PanelCard>
           <FieldRow label="Version" value="1.0.0" />
           <FieldRow label="Supabase" value={isSupabaseConfigured() ? 'Connected' : 'Not configured'} />
-          <FieldRow label="AI Vision" value={process.env.EXPO_PUBLIC_GEMINI_API_KEY ? 'Ready' : 'Not configured'} last />
-        </View>
+          <FieldRow
+            label="AI Vision"
+            value={process.env.EXPO_PUBLIC_GEMINI_API_KEY ? 'Ready' : 'Not configured'}
+            isLast
+          />
+        </PanelCard>
       </ScrollView>
+    </ScreenLayout>
+  );
+}
+
+function AffiliateRow({
+  label, sublabel, logoBg, logoText, logoLabel,
+  value, placeholder, onSave, colors, isLast,
+}: {
+  label: string; sublabel: string; logoBg: string; logoText: string; logoLabel: string;
+  value: string; placeholder: string; onSave: (v: string) => void;
+  colors: { textSecondary: string; textMuted: string; statusOk: string; bgDeep: string; borderDefault: string; borderSubtle: string };
+  isLast?: boolean;
+}) {
+  const [local, setLocal] = useState(value);
+  const saved = local === value && value.length > 0;
+
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingHorizontal: Spacing.md, paddingVertical: 10, minHeight: 52,
+      borderBottomWidth: isLast ? 0 : 1, borderBottomColor: colors.borderSubtle,
+    }}>
+      <View style={{ width: 44, height: 24, borderRadius: 3, backgroundColor: logoBg, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 14, fontWeight: '800', color: logoText, letterSpacing: -0.3 }}>{logoLabel}</Text>
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, fontWeight: '600' }}>{label}</Text>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textMuted }}>{sublabel}</Text>
+      </View>
+      <TextInput
+        style={{
+          width: 100, fontSize: 14, color: colors.textSecondary,
+          backgroundColor: colors.bgDeep, borderWidth: 1, borderColor: colors.borderDefault,
+          borderRadius: 4, paddingHorizontal: 8, paddingVertical: 6, textAlign: 'center',
+        }}
+        value={local}
+        onChangeText={setLocal}
+        onBlur={() => { if (local !== value) onSave(local); }}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+      />
+      {saved && <Ionicons name="checkmark-circle" size={18} color={colors.statusOk} />}
     </View>
   );
 }
 
-function FieldRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function ToggleRow({
+  icon,
+  label,
+  description,
+  value,
+  onValueChange,
+  last,
+}: {
+  icon: string;
+  label: string;
+  description: string;
+  value: boolean;
+  onValueChange: (val: boolean) => void;
+  last?: boolean;
+}) {
+  const { colors } = useTheme();
   return (
     <View
-      className="flex-row items-center justify-between px-md py-[7px]"
-      style={last ? undefined : { borderBottomWidth: 0.5, borderBottomColor: '#1e1e1e' }}
+      style={{
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: Spacing.md, paddingVertical: 13, backgroundColor: colors.bgRow,
+        ...(!last ? { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle } : {}),
+      }}
     >
-      <Text className="text-input text-text-muted">{label}</Text>
-      <Text className="text-input text-text-secondary">{value}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: Spacing.sm }}>
+        <Ionicons name={icon as any} size={18} color={colors.textMuted} />
+        <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>{label}</Text>
+          <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: 1 }}>{description}</Text>
+        </View>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ true: colors.accent, false: colors.bgElevated }}
+        thumbColor={colors.textPrimary}
+      />
     </View>
   );
 }

@@ -2,7 +2,7 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
+  TouchableOpacity,
   Alert,
   Modal,
   ScrollView,
@@ -10,7 +10,14 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  ScreenLayout, ScreenHeader,
+  EngravingLabel, PanelCard,
+  EmptyState,
+  Spacing, FontSize, Radius,
+} from '@/components/UIKit';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { LocationTree } from '@/components/LocationTree';
 import { QRCodeLabel } from '@/components/QRCodeLabel';
@@ -18,6 +25,7 @@ import type { StorageLocation, Part } from '@/lib/types';
 
 export default function LocationsScreen() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<StorageLocation | null>(null);
   const [locationParts, setLocationParts] = useState<Part[]>([]);
@@ -158,49 +166,75 @@ export default function LocationsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-zinc-50 dark:bg-zinc-950" style={{ paddingTop: insets.top }}>
-      <Stack.Screen options={{ title: 'Storage Locations', headerShown: true }} />
+    <ScreenLayout style={{ paddingTop: insets.top }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader title="Storage Locations" subtitle={`${locations.length} locations`} />
 
-      <ScrollView className="flex-1 px-4 pt-3">
-        <LocationTree
-          locations={locations}
-          onSelect={handleSelect}
-          onEdit={handleEdit}
-          selectedId={selectedLocation?.id}
-        />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
+        {locations.length === 0 && !isLoading ? (
+          <EmptyState
+            icon="location-outline"
+            title="No locations yet"
+            subtitle="Create storage locations to organize your parts"
+            actionLabel="Add Location"
+            onAction={openAddModal}
+          />
+        ) : (
+          <>
+            <EngravingLabel label="All locations" />
+            <LocationTree
+              locations={locations}
+              onSelect={handleSelect}
+              onEdit={handleEdit}
+              selectedId={selectedLocation?.id}
+            />
+          </>
+        )}
 
         {/* Parts in selected location */}
         {selectedLocation && (
-          <View className="mt-4 rounded-xl bg-white p-4 dark:bg-zinc-800">
-            <Text className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Parts in {selectedLocation.name}
-            </Text>
+          <>
+            <EngravingLabel label={`Parts in ${selectedLocation.name}`} />
             {locationParts.length === 0 ? (
-              <Text className="text-sm text-zinc-400">No parts stored here</Text>
+              <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm }}>
+                No parts stored here
+              </Text>
             ) : (
-              locationParts.map((part) => (
-                <View
-                  key={part.id}
-                  className="flex-row items-center justify-between border-b border-zinc-100 py-2 last:border-b-0 dark:border-zinc-700"
-                >
-                  <Text className="text-base text-zinc-900 dark:text-zinc-100">
-                    {part.name}
-                  </Text>
-                  <Text className="text-sm text-zinc-500">{part.quantity}</Text>
-                </View>
-              ))
+              <PanelCard>
+                {locationParts.map((part, i) => (
+                  <View
+                    key={part.id}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingHorizontal: Spacing.md, paddingVertical: 13, backgroundColor: colors.bgRow,
+                      ...(i < locationParts.length - 1
+                        ? { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }
+                        : {}),
+                    }}
+                  >
+                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textSecondary }}>{part.name}</Text>
+                    <Text style={{ fontSize: FontSize.sm, color: colors.textMuted }}>{part.quantity}</Text>
+                  </View>
+                ))}
+              </PanelCard>
             )}
-          </View>
+          </>
         )}
       </ScrollView>
 
       {/* FAB to add location */}
-      <Pressable
-        className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg active:bg-primary/80"
+      <TouchableOpacity
+        activeOpacity={0.75}
+        style={{
+          position: 'absolute', right: 16, bottom: insets.bottom + 16,
+          width: 56, height: 56, borderRadius: 28,
+          backgroundColor: colors.accentBg, borderWidth: 0.5, borderColor: colors.accentBorder,
+          alignItems: 'center', justifyContent: 'center',
+        }}
         onPress={openAddModal}
       >
-        <MaterialIcons name="create-new-folder" size={24} color="#ffffff" />
-      </Pressable>
+        <Ionicons name="add" size={24} color={colors.accent} />
+      </TouchableOpacity>
 
       {/* Add/Edit Modal */}
       <Modal
@@ -209,63 +243,81 @@ export default function LocationsScreen() {
         animationType="slide"
         onRequestClose={() => setShowEditModal(false)}
       >
-        <View className="flex-1 justify-end bg-black/50">
-          <View className="rounded-t-3xl bg-white px-5 pb-8 pt-5 dark:bg-zinc-900">
-            <View className="mb-4 flex-row items-center justify-between">
-              <Text className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{
+            backgroundColor: colors.bgCard, borderTopLeftRadius: Radius.card, borderTopRightRadius: Radius.card,
+            paddingHorizontal: 20, paddingBottom: 32, paddingTop: 20,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.lg }}>
+              <Text style={{ fontSize: FontSize.lg, fontWeight: '600', color: colors.textPrimary }}>
                 {editingLocation ? 'Edit Location' : 'New Location'}
               </Text>
-              <Pressable onPress={() => setShowEditModal(false)}>
-                <MaterialIcons name="close" size={24} color="#71717a" />
-              </Pressable>
+              <TouchableOpacity activeOpacity={0.7} onPress={() => setShowEditModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </TouchableOpacity>
             </View>
 
-            <Text className="mb-1.5 text-sm font-medium text-zinc-500">Name *</Text>
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '500', color: colors.textMuted, marginBottom: 5 }}>Name *</Text>
             <TextInput
-              className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-base text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              style={{
+                backgroundColor: colors.bgSurface, borderWidth: 0.5, borderColor: colors.borderDefault,
+                borderRadius: Radius.icon, paddingHorizontal: Spacing.md, paddingVertical: 12,
+                fontSize: FontSize.md, color: colors.textPrimary, marginBottom: Spacing.lg,
+              }}
               value={editName}
               onChangeText={setEditName}
               placeholder="e.g. Blue Tackle Box"
-              placeholderTextColor="#a1a1aa"
+              placeholderTextColor={colors.textDisabled}
               autoFocus
             />
 
-            <Text className="mb-1.5 text-sm font-medium text-zinc-500">Description</Text>
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '500', color: colors.textMuted, marginBottom: 5 }}>Description</Text>
             <TextInput
-              className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-base text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              style={{
+                backgroundColor: colors.bgSurface, borderWidth: 0.5, borderColor: colors.borderDefault,
+                borderRadius: Radius.icon, paddingHorizontal: Spacing.md, paddingVertical: 12,
+                fontSize: FontSize.md, color: colors.textPrimary, marginBottom: Spacing.lg,
+              }}
               value={editDescription}
               onChangeText={setEditDescription}
               placeholder="Optional description"
-              placeholderTextColor="#a1a1aa"
+              placeholderTextColor={colors.textDisabled}
             />
 
             {editParentId && (
-              <View className="mb-4 flex-row items-center rounded-lg bg-primary/10 px-3 py-2">
-                <MaterialIcons name="subdirectory-arrow-right" size={16} color="#0a7ea4" />
-                <Text className="ml-2 text-sm text-primary">
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                backgroundColor: colors.accentBg, borderRadius: Radius.icon,
+                paddingHorizontal: Spacing.md, paddingVertical: 8,
+                marginBottom: Spacing.lg, gap: 8,
+              }}>
+                <Ionicons name="arrow-forward-outline" size={16} color={colors.accent} />
+                <Text style={{ fontSize: FontSize.sm, color: colors.accent }}>
                   Inside: {locations.find((l) => l.id === editParentId)?.name ?? 'Parent'}
                 </Text>
-                <Pressable className="ml-auto" onPress={() => setEditParentId(null)}>
-                  <MaterialIcons name="close" size={16} color="#0a7ea4" />
-                </Pressable>
+                <TouchableOpacity style={{ marginLeft: 'auto' }} onPress={() => setEditParentId(null)}>
+                  <Ionicons name="close" size={16} color={colors.accent} />
+                </TouchableOpacity>
               </View>
             )}
 
-            <Pressable
-              className={`items-center rounded-xl py-4 ${
-                editName.trim() ? 'bg-primary' : 'bg-zinc-200'
-              }`}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={{
+                alignItems: 'center', borderRadius: Radius.card, paddingVertical: 14, borderWidth: 0.5,
+                backgroundColor: editName.trim() ? colors.accentBg : colors.bgSurface,
+                borderColor: editName.trim() ? colors.accentBorder : colors.borderDefault,
+              }}
               onPress={handleSaveLocation}
               disabled={!editName.trim()}
             >
-              <Text
-                className={`text-base font-semibold ${
-                  editName.trim() ? 'text-white' : 'text-zinc-400'
-                }`}
-              >
+              <Text style={{
+                fontSize: FontSize.md, fontWeight: '600',
+                color: editName.trim() ? colors.accent : colors.textFaint,
+              }}>
                 {editingLocation ? 'Save Changes' : 'Create Location'}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -277,8 +329,9 @@ export default function LocationsScreen() {
         animationType="fade"
         onRequestClose={() => setShowQR(false)}
       >
-        <Pressable
-          className="flex-1 items-center justify-center bg-black/60"
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}
           onPress={() => setShowQR(false)}
         >
           {selectedLocation && (
@@ -288,8 +341,8 @@ export default function LocationsScreen() {
               size={200}
             />
           )}
-        </Pressable>
+        </TouchableOpacity>
       </Modal>
-    </View>
+    </ScreenLayout>
   );
 }

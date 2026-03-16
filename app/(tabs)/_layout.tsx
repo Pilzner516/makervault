@@ -2,28 +2,39 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/context/ThemeContext';
+
+const TAB_ICON = (focused: boolean, color: string, accentColor: string, icon: string, activeIcon: string) => (
+  <View style={{ alignItems: 'center' }}>
+    {focused && (
+      <View style={{ width: 20, height: 2, backgroundColor: accentColor, borderRadius: 1, position: 'absolute', top: -8 }} />
+    )}
+    <Ionicons name={(focused ? activeIcon : icon) as any} size={22} color={color} />
+  </View>
+);
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#f0a030',
-        tabBarInactiveTintColor: '#3a3a3a',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textDisabled,
         tabBarStyle: {
-          backgroundColor: '#0e0e0e',
-          borderTopColor: '#1e1e1e',
+          backgroundColor: colors.bgBase,
+          borderTopColor: colors.borderSubtle,
           borderTopWidth: 0.5,
           paddingTop: 5,
           paddingBottom: insets.bottom + 6,
           height: 56 + insets.bottom,
         },
         tabBarLabelStyle: {
-          fontSize: 8,
-          fontWeight: '500',
+          fontSize: 11,
+          fontWeight: '600',
         },
         tabBarIconStyle: {
           marginBottom: -2,
@@ -34,65 +45,39 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <MaterialIcons name="home" size={22} color={color} />
-              {focused && (
-                <View style={{ width: 14, height: 2, backgroundColor: '#f0a030', borderRadius: 1, marginTop: 2 }} />
-              )}
-            </View>
-          ),
+          tabBarIcon: ({ color, focused }) => TAB_ICON(focused, color, colors.accent, 'home-outline', 'home'),
         }}
       />
       <Tabs.Screen
-        name="inventory"
+        name="search"
         options={{
-          title: 'Inventory',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <MaterialIcons name="inventory-2" size={22} color={color} />
-              {focused && (
-                <View style={{ width: 14, height: 2, backgroundColor: '#f0a030', borderRadius: 1, marginTop: 2 }} />
-              )}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="projects"
-        options={{
-          title: 'Projects',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <MaterialIcons name="lightbulb" size={22} color={color} />
-              {focused && (
-                <View style={{ width: 14, height: 2, backgroundColor: '#f0a030', borderRadius: 1, marginTop: 2 }} />
-              )}
-            </View>
-          ),
+          title: 'Search',
+          tabBarIcon: ({ color, focused }) => TAB_ICON(focused, color, colors.accent, 'search-outline', 'search'),
         }}
       />
       <Tabs.Screen
         name="scan"
         options={{
           title: 'Scan',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <MaterialIcons name="center-focus-strong" size={22} color={color} />
-              {focused && (
-                <View style={{ width: 14, height: 2, backgroundColor: '#f0a030', borderRadius: 1, marginTop: 2 }} />
-              )}
-            </View>
-          ),
+          tabBarIcon: ({ color, focused }) => TAB_ICON(focused, color, colors.accent, 'scan-outline', 'scan'),
         }}
       />
-      {/* Hidden from tab bar — accessible via router.push */}
       <Tabs.Screen
-        name="explore"
+        name="inventory"
         options={{
-          href: null,
+          title: 'Inventory',
+          tabBarIcon: ({ color, focused }) => TAB_ICON(focused, color, colors.accent, 'cube-outline', 'cube'),
         }}
       />
+      <Tabs.Screen
+        name="projects"
+        options={{
+          title: 'Projects',
+          tabBarIcon: ({ color, focused }) => TAB_ICON(focused, color, colors.accent, 'construct-outline', 'construct'),
+        }}
+      />
+      {/* Hidden — old explore screen, accessible via router.push only */}
+      <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
   );
 }

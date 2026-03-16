@@ -15,6 +15,7 @@ const Haptics = Platform.OS !== 'web'
   ? require('expo-haptics') as typeof import('expo-haptics')
   : null;
 import { useRouter } from 'expo-router';
+import { useTheme } from '@/context/ThemeContext';
 import { useVoiceStore } from '@/lib/zustand/voiceStore';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import {
@@ -26,6 +27,7 @@ import {
 import { stopSpeaking } from '@/lib/tts';
 
 export function VoiceFAB() {
+  const { colors } = useTheme();
   const router = useRouter();
   const {
     state,
@@ -250,18 +252,18 @@ export function VoiceFAB() {
           : 'mic-none';
 
   const bgColors: Record<string, string> = {
-    listening: '#f05032',
-    processing: '#f0a030',
-    speaking: '#32b464',
-    idle: '#f0a030',
+    listening: colors.statusOut,
+    processing: colors.accent,
+    speaking: colors.statusOk,
+    idle: colors.accent,
   };
-  const bgColor = bgColors[state] ?? '#f0a030';
+  const bgColor = bgColors[state] ?? colors.accent;
 
   return (
     <>
       {/* Ambient mode indicator */}
       {ambientMode && (
-        <View className="absolute left-0 right-0 top-0 z-50 h-1 bg-red-500" />
+        <View className="absolute left-0 right-0 top-0 z-50 h-1 bg-status-out" />
       )}
 
       {/* FAB button */}
@@ -269,7 +271,7 @@ export function VoiceFAB() {
         {/* Pulse ring */}
         {state === 'listening' && (
           <Animated.View
-            className="absolute h-14 w-14 rounded-full bg-red-500"
+            className="absolute h-14 w-14 rounded-full bg-status-out"
             style={pulseStyle}
           />
         )}
@@ -312,9 +314,9 @@ export function VoiceFAB() {
               <MaterialIcons
                 name={iconName}
                 size={20}
-                color={state === 'listening' ? '#ef4444' : '#0a7ea4'}
+                color={state === 'listening' ? colors.statusOut : colors.accent}
               />
-              <Text className="text-sm font-medium text-zinc-500 capitalize">
+              <Text className="text-sm font-medium text-text-muted capitalize">
                 {state === 'idle' ? 'ready' : state}
               </Text>
             </View>
@@ -322,19 +324,22 @@ export function VoiceFAB() {
             {/* Transcript display */}
             <ScrollView className="max-h-40">
               {(transcript || partialTranscript) && (
-                <Text className="text-center text-lg text-zinc-900 dark:text-zinc-100">
+                <Text className="text-center text-lg text-text-primary">
                   {transcript || partialTranscript}
                 </Text>
               )}
               {lastResponse && (
-                <View className="mt-3 rounded-lg bg-primary/10 px-3 py-2">
-                  <Text className="text-center text-base text-primary">
+                <View
+                  className="mt-3 rounded-md px-3 py-2"
+                  style={{ backgroundColor: colors.accentBg }}
+                >
+                  <Text className="text-center text-base" style={{ color: colors.accent }}>
                     {lastResponse}
                   </Text>
                 </View>
               )}
               {error && (
-                <Text className="mt-2 text-center text-sm text-danger">
+                <Text className="mt-2 text-center text-sm text-status-out">
                   {error}
                 </Text>
               )}
@@ -344,19 +349,21 @@ export function VoiceFAB() {
             {(!isVoiceAvailable() || state === 'idle') && (
               <View className="mt-4 flex-row items-center gap-2">
                 <TextInput
-                  className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-base text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="flex-1 rounded-md bg-surface px-3 py-2.5 text-base text-text-primary"
+                  style={{ borderWidth: 0.5, borderColor: '#2a2a2a' }}
                   placeholder="Type a command..."
-                  placeholderTextColor="#a1a1aa"
+                  placeholderTextColor="#666666"
                   value={fallbackText}
                   onChangeText={setFallbackText}
                   onSubmitEditing={handleTextSubmit}
                   returnKeyType="send"
                 />
                 <Pressable
-                  className="rounded-lg bg-primary px-4 py-2.5"
+                  className="rounded-md px-4 py-2.5"
+                  style={{ backgroundColor: colors.accentBg, borderWidth: 0.5, borderColor: colors.accentBorder }}
                   onPress={handleTextSubmit}
                 >
-                  <MaterialIcons name="send" size={20} color="#fff" />
+                  <MaterialIcons name="send" size={20} color={colors.accent} />
                 </Pressable>
               </View>
             )}
@@ -365,7 +372,7 @@ export function VoiceFAB() {
             <View className="mt-4 flex-row justify-center gap-4">
               {state === 'idle' && isVoiceAvailable() && (
                 <Pressable
-                  className="flex-row items-center gap-1.5 rounded-full bg-red-500 px-5 py-2.5"
+                  className="flex-row items-center gap-1.5 rounded-full bg-status-out px-5 py-2.5"
                   onPress={handlePress}
                 >
                   <MaterialIcons name="mic" size={18} color="#fff" />
@@ -375,13 +382,14 @@ export function VoiceFAB() {
                 </Pressable>
               )}
               <Pressable
-                className="rounded-full bg-zinc-200 px-5 py-2.5 dark:bg-zinc-700"
+                className="rounded-full px-5 py-2.5"
+                style={{ backgroundColor: '#1a1a1a', borderWidth: 0.5, borderColor: '#2a2a2a' }}
                 onPress={() => {
                   setShowOverlay(false);
                   reset();
                 }}
               >
-                <Text className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <Text className="text-sm font-medium text-text-secondary">
                   Close
                 </Text>
               </Pressable>

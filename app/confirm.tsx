@@ -2,20 +2,29 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
-  Alert,
+  TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  ScreenLayout, ScreenHeader,
+  EngravingLabel, PrimaryButton, SecondaryButton,
+  Badge, EmptyState, PanelCard,
+  Spacing, FontSize, Radius,
+} from '@/components/UIKit';
+import { useTheme } from '@/context/ThemeContext';
 import { identifyPart, identifyBulkParts } from '@/lib/gemini';
-import { preprocessImage, simpleHash } from '@/lib/image';
+import { preprocessImage, simpleHash, createThumbnailDataUri } from '@/lib/image';
 import { supabase } from '@/lib/supabase';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
+import { useSettingsStore } from '@/lib/zustand/settingsStore';
 import type { GeminiIdentification, ConfirmationFeedback } from '@/lib/types';
+
+type BulkDecision = 'pending' | 'add' | 'skip';
 
 export default function ConfirmScreen() {
   const { imageUri, bulkMode } = useLocalSearchParams<{
@@ -24,14 +33,20 @@ export default function ConfirmScreen() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { addPart } = useInventoryStore();
+  const scanPreset = useSettingsStore((s) => s.getScanPreset());
 
   const [isAnalyzing, setIsAnalyzing] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GeminiIdentification | null>(null);
   const [bulkResults, setBulkResults] = useState<GeminiIdentification[]>([]);
-  const [altIndex, setAltIndex] = useState(-1); // -1 = primary, 0+ = alternative index
+  const [bulkDecisions, setBulkDecisions] = useState<BulkDecision[]>([]);
+  const [altIndex, setAltIndex] = useState(-1);
   const [processedUri, setProcessedUri] = useState<string | null>(null);
+  const [base64Data, setBase64Data] = useState<string | null>(null);
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [imageHash, setImageHash] = useState('');
 
   const isBulk = bulkMode === '1';
@@ -41,13 +56,26 @@ export default function ConfirmScreen() {
 
     (async () => {
       try {
-        const { base64, uri, mimeType } = await preprocessImage(imageUri);
+        const { base64, uri, mimeType } = await preprocessImage(imageUri, {
+          width: scanPreset.imageWidth,
+          quality: scanPreset.jpegQuality,
+        });
         setProcessedUri(uri);
+        setBase64Data(base64);
         setImageHash(simpleHash(base64.slice(0, 200)));
+
+        // Generate a small thumbnail for DB storage
+        try {
+          const thumb = await createThumbnailDataUri(uri);
+          setThumbnailUri(thumb);
+        } catch {
+          // Continue without thumbnail
+        }
 
         if (isBulk) {
           const results = await identifyBulkParts(base64, mimeType);
           setBulkResults(results);
+          setBulkDecisions(results.map(() => 'pending'));
         } else {
           const identification = await identifyPart(base64, mimeType);
           setResult(identification);
@@ -80,61 +108,68 @@ export default function ConfirmScreen() {
       action,
       final_mpn: finalMpn,
     };
-    // Fire-and-forget logging
     supabase.from('identification_feedback').insert(feedback).then();
   };
 
+  const saveOnePart = async (identification: GeminiIdentification) => {
+    const imageUrl: string | null = thumbnailUri;
+    await addPart({
+      name: identification.part_name,
+      manufacturer: identification.manufacturer || null,
+      mpn: identification.mpn || null,
+      category: identification.category || null,
+      subcategory: identification.subcategory || null,
+      description: null,
+      specs: identification.specs || null,
+      quantity: 1,
+      low_stock_threshold: 0,
+      image_url: imageUrl,
+      datasheet_url: null,
+      notes: identification.markings_detected.length > 0
+        ? `Markings: ${identification.markings_detected.join(', ')}`
+        : null,
+    });
+  };
+
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Single-part confirm
   const handleConfirm = async (identification: GeminiIdentification) => {
     try {
-      // Upload image to Supabase Storage
-      let imageUrl: string | null = null;
-      if (processedUri) {
-        const fileName = `parts/${Date.now()}.jpg`;
-        const response = await fetch(processedUri);
-        const blob = await response.blob();
-        const { data } = await supabase.storage
-          .from('part-images')
-          .upload(fileName, blob, { contentType: 'image/jpeg' });
-        if (data) {
-          const { data: urlData } = supabase.storage
-            .from('part-images')
-            .getPublicUrl(data.path);
-          imageUrl = urlData.publicUrl;
+      await saveOnePart(identification);
+      logFeedback(altIndex >= 0 ? 'chose_alternative' : 'confirmed', identification.mpn);
+      setSaved(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      console.error('Save failed:', msg);
+      setSaveError(msg);
+    }
+  };
+
+  // Bulk: mark one item as add or skip
+  const setBulkDecision = (index: number, decision: BulkDecision) => {
+    setBulkDecisions((prev) => prev.map((d, i) => (i === index ? decision : d)));
+  };
+
+  const [bulkSavedCount, setBulkSavedCount] = useState<number | null>(null);
+
+  // Bulk: save all items marked "add"
+  const handleBulkConfirm = async () => {
+    setIsSaving(true);
+    let added = 0;
+    for (let i = 0; i < bulkResults.length; i++) {
+      if (bulkDecisions[i] === 'add') {
+        try {
+          await saveOnePart(bulkResults[i]);
+          added++;
+        } catch {
+          // Continue with remaining items
         }
       }
-
-      await addPart({
-        name: identification.part_name,
-        manufacturer: identification.manufacturer || null,
-        mpn: identification.mpn || null,
-        category: identification.category || null,
-        subcategory: identification.subcategory || null,
-        description: null,
-        specs: identification.specs || null,
-        quantity: 1,
-        low_stock_threshold: 5,
-        image_url: imageUrl,
-        datasheet_url: null,
-        notes: identification.markings_detected.length > 0
-          ? `Markings: ${identification.markings_detected.join(', ')}`
-          : null,
-      });
-
-      logFeedback(
-        altIndex >= 0 ? 'chose_alternative' : 'confirmed',
-        identification.mpn
-      );
-
-      Alert.alert('Added!', `${identification.part_name} saved to inventory.`, [
-        { text: 'Scan Another', onPress: () => router.back() },
-        {
-          text: 'View Inventory',
-          onPress: () => router.replace('/(tabs)/inventory'),
-        },
-      ]);
-    } catch {
-      Alert.alert('Error', 'Failed to save part.');
     }
+    setIsSaving(false);
+    setBulkSavedCount(added);
   };
 
   const handleReject = () => {
@@ -142,252 +177,375 @@ export default function ConfirmScreen() {
     router.back();
   };
 
-  // Loading state
+  // -- SAVED STATE --
+  if (saved) {
+    return (
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Saved!" backLabel="Scan" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.lg }}>
+          <Ionicons name="checkmark-circle" size={56} color={colors.statusOk} />
+          <Text style={{ fontSize: FontSize.lg, fontWeight: '600', color: colors.textPrimary, marginTop: Spacing.sm }}>
+            Added to Inventory
+          </Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textMuted, textAlign: 'center', marginTop: Spacing.xs }}>
+            {displayedResult?.part_name ?? 'Part'} saved successfully
+          </Text>
+          <View style={{ marginTop: Spacing.xl, width: '100%' }}>
+            <PrimaryButton label="Scan Another" onPress={() => router.back()} />
+            <SecondaryButton label="View Inventory" onPress={() => router.replace('/(tabs)/inventory')} />
+          </View>
+        </View>
+      </ScreenLayout>
+    );
+  }
+
+  // -- SAVE ERROR STATE --
+  if (saveError) {
+    return (
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Error" backLabel="Back" onBack={() => router.back()} />
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Failed to save"
+          subtitle={saveError}
+          actionLabel="Try Again"
+          onAction={() => setSaveError(null)}
+        />
+      </ScreenLayout>
+    );
+  }
+
+  // -- LOADING STATE --
   if (isAnalyzing) {
     return (
-      <View className="flex-1 items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Stack.Screen options={{ title: 'Analyzing...' }} />
-        {processedUri && (
-          <Image
-            source={{ uri: processedUri }}
-            className="mb-6 h-48 w-48 rounded-2xl"
-            contentFit="cover"
-          />
-        )}
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text className="mt-4 text-base text-zinc-500">
-          {isBulk ? 'Identifying all parts...' : 'Identifying component...'}
-        </Text>
-      </View>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <View className="flex-1 items-center justify-center bg-zinc-50 px-8 dark:bg-zinc-950">
-        <Stack.Screen options={{ title: 'Error' }} />
-        <MaterialIcons name="error-outline" size={48} color="#ef4444" />
-        <Text className="mt-3 text-center text-base text-zinc-700 dark:text-zinc-300">
-          {error}
-        </Text>
-        <Pressable
-          className="mt-5 rounded-xl bg-primary px-6 py-3"
-          onPress={() => router.back()}
-        >
-          <Text className="font-semibold text-white">Try Again</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  // Bulk results
-  if (isBulk && bulkResults.length > 0) {
-    return (
-      <View className="flex-1 bg-zinc-50 dark:bg-zinc-950">
-        <Stack.Screen options={{ title: `${bulkResults.length} Parts Found` }} />
-        <ScrollView
-          className="flex-1 px-4 pt-4"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        >
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Analyzing..." backLabel="Cancel" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.lg }}>
           {processedUri && (
             <Image
               source={{ uri: processedUri }}
-              className="mb-4 h-48 w-full rounded-2xl"
+              style={{ height: 180, width: 180, borderRadius: Radius.card, marginBottom: 20 }}
               contentFit="cover"
             />
           )}
-          {bulkResults.map((item, i) => (
-            <View
-              key={`${item.mpn}-${i}`}
-              className="mb-3 rounded-xl bg-white p-4 dark:bg-zinc-800"
-            >
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1">
-                  <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                    {item.part_name}
-                  </Text>
-                  {item.manufacturer && (
-                    <Text className="text-sm text-zinc-500">
-                      {item.manufacturer}
-                      {item.mpn ? ` — ${item.mpn}` : ''}
-                    </Text>
-                  )}
-                  {item.category && (
-                    <View className="mt-1 self-start rounded-full bg-primary/10 px-2.5 py-0.5">
-                      <Text className="text-xs text-primary">{item.category}</Text>
-                    </View>
-                  )}
-                </View>
-                <ConfidenceBadge confidence={item.confidence} />
-              </View>
-              <View className="mt-3 flex-row gap-2">
-                <Pressable
-                  className="flex-1 items-center rounded-lg bg-primary py-2.5"
-                  onPress={() => handleConfirm(item)}
-                >
-                  <Text className="text-sm font-medium text-white">Add</Text>
-                </Pressable>
-                <Pressable
-                  className="rounded-lg bg-zinc-200 px-4 py-2.5 dark:bg-zinc-700"
-                  onPress={() => {
-                    setBulkResults(bulkResults.filter((_, idx) => idx !== i));
-                  }}
-                >
-                  <MaterialIcons name="close" size={18} color="#71717a" />
-                </Pressable>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={{ fontSize: FontSize.md, color: colors.textMuted, marginTop: Spacing.lg }}>
+            {isBulk ? 'Identifying all parts...' : 'Identifying component...'}
+          </Text>
+        </View>
+      </ScreenLayout>
     );
   }
 
-  // Single result — side-by-side confirmation
+  // -- ERROR STATE --
+  if (error) {
+    return (
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Error" backLabel="Back" onBack={() => router.back()} />
+        <EmptyState
+          icon="alert-circle-outline"
+          title={error}
+          actionLabel="Try Again"
+          onAction={() => router.back()}
+        />
+      </ScreenLayout>
+    );
+  }
+
+  // -- BULK SAVED --
+  if (bulkSavedCount !== null) {
+    return (
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Done!" backLabel="Scan" onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.lg }}>
+          <Ionicons name="checkmark-circle" size={56} color={colors.statusOk} />
+          <Text style={{ fontSize: FontSize.lg, fontWeight: '600', color: colors.textPrimary, marginTop: Spacing.sm }}>
+            {bulkSavedCount} Part{bulkSavedCount !== 1 ? 's' : ''} Added
+          </Text>
+          <View style={{ marginTop: Spacing.xl, width: '100%' }}>
+            <PrimaryButton label="Scan More" onPress={() => router.back()} />
+            <SecondaryButton label="View Inventory" onPress={() => router.replace('/(tabs)/inventory')} />
+          </View>
+        </View>
+      </ScreenLayout>
+    );
+  }
+
+  // -- BULK RESULTS --
+  if (isBulk && bulkResults.length > 0) {
+    const pendingCount = bulkDecisions.filter((d) => d === 'pending').length;
+    const addCount = bulkDecisions.filter((d) => d === 'add').length;
+
+    return (
+      <ScreenLayout style={{ paddingTop: insets.top }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader
+          title={`${bulkResults.length} Parts Found`}
+          backLabel="Cancel"
+          onBack={() => router.back()}
+        />
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+        >
+          {/* Source image */}
+          {processedUri && (
+            <Image
+              source={{ uri: processedUri }}
+              style={{ height: 160, width: '100%', backgroundColor: colors.bgCard }}
+              contentFit="cover"
+            />
+          )}
+
+          <EngravingLabel label="Review each item" />
+
+          {bulkResults.map((item, i) => {
+            const decision = bulkDecisions[i];
+            const isDecided = decision !== 'pending';
+            return (
+              <View
+                key={`bulk-${i}`}
+                style={{
+                  marginHorizontal: Spacing.md,
+                  marginBottom: 7,
+                  borderRadius: Radius.card,
+                  padding: Spacing.md,
+                  borderWidth: 0.5,
+                  backgroundColor: isDecided ? colors.bgSurface : colors.bgCard,
+                  borderColor: decision === 'add' ? colors.statusOk : decision === 'skip' ? colors.borderMid : colors.borderDefault,
+                  opacity: decision === 'skip' ? 0.5 : 1,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  {/* Item number */}
+                  <View style={{
+                    width: 32, height: 32, borderRadius: Radius.icon,
+                    backgroundColor: colors.bgSurface, borderWidth: 0.5, borderColor: colors.borderMid,
+                    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+                  }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.accent }}>{i + 1}</Text>
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '500', color: colors.textSecondary }}>{item.part_name}</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 }}>
+                      {[item.manufacturer, item.category].filter((s) => s && s.toLowerCase() !== 'n/a').join(' \u00B7 ') || item.category || ''}
+                    </Text>
+                    {item.specs && Object.keys(item.specs).length > 0 && (
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: 3 }} numberOfLines={1}>
+                        {Object.entries(item.specs).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' \u00B7 ')}
+                      </Text>
+                    )}
+                  </View>
+
+                  <ConfidenceBadge confidence={item.confidence} />
+                </View>
+
+                {/* Add / Skip buttons */}
+                {!isDecided && (
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={{
+                        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                        borderRadius: Radius.icon, paddingVertical: 8, backgroundColor: colors.statusOkBg,
+                        borderWidth: 0.5, borderColor: colors.statusOkBorder, gap: 4,
+                      }}
+                      onPress={() => setBulkDecision(i, 'add')}
+                    >
+                      <Ionicons name="add" size={16} color={colors.statusOk} />
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: colors.statusOk }}>Add</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={{
+                        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                        borderRadius: Radius.icon, paddingVertical: 8, backgroundColor: colors.bgSurface,
+                        borderWidth: 0.5, borderColor: colors.borderDefault, gap: 4,
+                      }}
+                      onPress={() => setBulkDecision(i, 'skip')}
+                    >
+                      <Ionicons name="close" size={16} color={colors.textFaint} />
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: colors.textFaint }}>Skip</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Decision badge */}
+                {isDecided && (
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 }}
+                    onPress={() => setBulkDecision(i, 'pending')}
+                  >
+                    <Ionicons
+                      name={decision === 'add' ? 'checkmark-circle' : 'close-circle'}
+                      size={14}
+                      color={decision === 'add' ? colors.statusOk : colors.textFaint}
+                    />
+                    <Text style={{ fontSize: FontSize.xs, color: decision === 'add' ? colors.statusOk : colors.textFaint }}>
+                      {decision === 'add' ? 'Will add' : 'Skipped'} \u00B7 tap to change
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        {/* Bottom confirm bar */}
+        <View style={{
+          paddingHorizontal: Spacing.md, paddingTop: 10, paddingBottom: insets.bottom + 8,
+          backgroundColor: colors.bgBase, borderTopWidth: 0.5, borderTopColor: colors.borderSubtle,
+        }}>
+          {pendingCount > 0 && (
+            <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, textAlign: 'center', marginBottom: 6 }}>
+              {pendingCount} item{pendingCount !== 1 ? 's' : ''} still need a decision
+            </Text>
+          )}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              borderRadius: Radius.icon, paddingVertical: 11, alignItems: 'center', borderWidth: 0.5,
+              backgroundColor: addCount > 0 ? colors.accentBg : colors.bgSurface,
+              borderColor: addCount > 0 ? colors.accentBorder : colors.borderDefault,
+              opacity: isSaving ? 0.5 : 1,
+            }}
+            onPress={handleBulkConfirm}
+            disabled={addCount === 0 || isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Text style={{
+                fontSize: FontSize.sm, fontWeight: '500',
+                color: addCount > 0 ? colors.accent : colors.textFaint,
+              }}>
+                {addCount > 0 ? `Add ${addCount} Part${addCount !== 1 ? 's' : ''} to Inventory` : 'Select items to add'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScreenLayout>
+    );
+  }
+
+  // -- SINGLE RESULT --
   if (!displayedResult) return null;
 
   const lowConfidence = displayedResult.confidence < 0.6;
 
   return (
-    <View className="flex-1 bg-zinc-50 dark:bg-zinc-950">
-      <Stack.Screen options={{ title: 'Confirm Part' }} />
+    <ScreenLayout style={{ paddingTop: insets.top }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader title="Confirm Part" backLabel="Cancel" onBack={() => router.back()} />
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
-        {/* Side-by-side panels */}
-        <View className="flex-row px-4 pt-4">
-          {/* Left: user capture */}
-          <View className="mr-1.5 flex-1 rounded-xl bg-white p-3 dark:bg-zinc-800">
-            <Text className="mb-2 text-xs font-medium uppercase text-zinc-400">
-              Your Photo
-            </Text>
-            {processedUri && (
-              <Image
-                source={{ uri: processedUri }}
-                className="h-40 w-full rounded-lg"
-                contentFit="cover"
-              />
-            )}
-            {displayedResult.markings_detected.length > 0 && (
-              <View className="mt-2">
-                <Text className="text-xs text-zinc-500">Markings detected:</Text>
-                <Text className="mt-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  {displayedResult.markings_detected.join(', ')}
+        {/* Photo */}
+        {processedUri && (
+          <Image
+            source={{ uri: processedUri }}
+            style={{ height: 200, width: '100%', backgroundColor: colors.bgCard }}
+            contentFit="cover"
+          />
+        )}
+
+        {/* AI match card */}
+        <View style={{
+          backgroundColor: colors.bgCard, borderWidth: 0.5, borderColor: colors.borderDefault,
+          borderRadius: Radius.card, marginHorizontal: Spacing.md, marginTop: Spacing.sm, padding: Spacing.md,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: Spacing.sm }}>
+              <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textPrimary }}>
+                {displayedResult.part_name}
+              </Text>
+              {displayedResult.manufacturer && (
+                <Text style={{ fontSize: FontSize.sm, color: colors.textMuted, marginTop: 2 }}>
+                  {displayedResult.manufacturer}
                 </Text>
-              </View>
-            )}
+              )}
+              {displayedResult.mpn && (
+                <Text style={{ fontSize: FontSize.xs, color: colors.accent, marginTop: 2 }}>
+                  MPN: {displayedResult.mpn}
+                </Text>
+              )}
+            </View>
+            <ConfidenceBadge confidence={displayedResult.confidence} />
           </View>
 
-          {/* Right: AI match */}
-          <View className="ml-1.5 flex-1 rounded-xl bg-white p-3 dark:bg-zinc-800">
-            <View className="mb-2 flex-row items-center justify-between">
-              <Text className="text-xs font-medium uppercase text-zinc-400">
-                AI Match
+          {displayedResult.category && (
+            <View style={{
+              marginTop: Spacing.sm, alignSelf: 'flex-start',
+              backgroundColor: colors.accentBg, borderRadius: Radius.badge,
+              paddingHorizontal: 6, paddingVertical: 2,
+            }}>
+              <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: colors.accent }}>
+                {displayedResult.category}
               </Text>
-              <ConfidenceBadge confidence={displayedResult.confidence} />
             </View>
-            <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-              {displayedResult.part_name}
-            </Text>
-            {displayedResult.manufacturer && (
-              <Text className="mt-0.5 text-sm text-zinc-500">
-                {displayedResult.manufacturer}
-              </Text>
-            )}
-            {displayedResult.mpn && (
-              <Text className="mt-0.5 text-sm font-mono text-zinc-600 dark:text-zinc-400">
-                MPN: {displayedResult.mpn}
-              </Text>
-            )}
-            {displayedResult.category && (
-              <View className="mt-2 self-start rounded-full bg-primary/10 px-2.5 py-0.5">
-                <Text className="text-xs text-primary">
-                  {displayedResult.category}
-                </Text>
-              </View>
-            )}
-            {displayedResult.specs &&
-              Object.keys(displayedResult.specs).length > 0 && (
-                <View className="mt-2">
-                  <Text className="text-xs text-zinc-500">Key Specs:</Text>
-                  {Object.entries(displayedResult.specs).map(([k, v]) => (
-                    <Text
-                      key={k}
-                      className="text-xs text-zinc-700 dark:text-zinc-300"
-                    >
-                      {k}: {v}
-                    </Text>
-                  ))}
+          )}
+
+          {displayedResult.specs && Object.keys(displayedResult.specs).length > 0 && (
+            <View style={{ marginTop: Spacing.sm, borderTopWidth: 0.5, borderTopColor: colors.borderDefault, paddingTop: 8 }}>
+              {Object.entries(displayedResult.specs).map(([k, v]) => (
+                <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, textTransform: 'capitalize' }}>{k}</Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>{v}</Text>
                 </View>
-              )}
-          </View>
+              ))}
+            </View>
+          )}
+
+          {displayedResult.markings_detected.length > 0 && (
+            <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: Spacing.sm }}>
+              Markings: {displayedResult.markings_detected.join(', ')}
+            </Text>
+          )}
         </View>
 
         {/* Low confidence warning */}
         {lowConfidence && (
-          <View className="mx-4 mt-3 flex-row items-center rounded-lg bg-warning/10 px-3 py-2.5">
-            <MaterialIcons name="warning" size={18} color="#f59e0b" />
-            <Text className="ml-2 flex-1 text-sm text-warning">
-              Low confidence — please verify before confirming
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', marginHorizontal: Spacing.md, marginTop: Spacing.sm,
+            backgroundColor: colors.alertWarnBg, borderRadius: Radius.icon,
+            paddingVertical: 6, paddingHorizontal: 10, gap: 4,
+          }}>
+            <Ionicons name="warning" size={14} color={colors.accent} />
+            <Text style={{ fontSize: FontSize.xs, color: colors.accent }}>
+              Low confidence \u2014 verify before confirming
             </Text>
           </View>
         )}
 
-        {/* Alternatives carousel */}
+        {/* Alternatives */}
         {result && result.alternatives.length > 0 && (
-          <View className="mx-4 mt-3">
-            <Text className="mb-2 text-sm font-medium text-zinc-500">
-              Other Possible Matches
-            </Text>
+          <View style={{ marginHorizontal: Spacing.md, marginTop: Spacing.sm }}>
+            <EngravingLabel label="Other matches" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-2">
-                {/* Primary match */}
-                <Pressable
-                  className={`rounded-lg px-3 py-2 ${
-                    altIndex === -1 ? 'bg-primary' : 'bg-zinc-200 dark:bg-zinc-800'
-                  }`}
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <AltPill
+                  label={result.part_name}
+                  pct={Math.round(result.confidence * 100)}
+                  active={altIndex === -1}
                   onPress={() => setAltIndex(-1)}
-                >
-                  <Text
-                    className={`text-sm font-medium ${
-                      altIndex === -1 ? 'text-white' : 'text-zinc-700 dark:text-zinc-300'
-                    }`}
-                  >
-                    {result.part_name}
-                  </Text>
-                  <Text
-                    className={`text-xs ${
-                      altIndex === -1 ? 'text-white/70' : 'text-zinc-500'
-                    }`}
-                  >
-                    {Math.round(result.confidence * 100)}%
-                  </Text>
-                </Pressable>
+                />
                 {result.alternatives.map((alt, i) => (
-                  <Pressable
+                  <AltPill
                     key={`alt-${i}`}
-                    className={`rounded-lg px-3 py-2 ${
-                      altIndex === i ? 'bg-primary' : 'bg-zinc-200 dark:bg-zinc-800'
-                    }`}
+                    label={alt.part_name}
+                    pct={Math.round(alt.confidence * 100)}
+                    active={altIndex === i}
                     onPress={() => setAltIndex(i)}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        altIndex === i ? 'text-white' : 'text-zinc-700 dark:text-zinc-300'
-                      }`}
-                    >
-                      {alt.part_name}
-                    </Text>
-                    <Text
-                      className={`text-xs ${
-                        altIndex === i ? 'text-white/70' : 'text-zinc-500'
-                      }`}
-                    >
-                      {Math.round(alt.confidence * 100)}%
-                    </Text>
-                  </Pressable>
+                  />
                 ))}
               </View>
             </ScrollView>
@@ -395,58 +553,63 @@ export default function ConfirmScreen() {
         )}
 
         {/* Action buttons */}
-        <View className="mx-4 mt-5 gap-3">
-          <Pressable
-            className="flex-row items-center justify-center rounded-xl bg-primary py-4 active:bg-primary/80"
+        <View style={{ marginTop: Spacing.lg }}>
+          <PrimaryButton
+            label="Confirm & Save"
+            icon="checkmark-circle-outline"
             onPress={() => handleConfirm(displayedResult)}
-          >
-            <MaterialIcons name="check-circle" size={20} color="#fff" />
-            <Text className="ml-2 text-base font-semibold text-white">
-              Confirm & Save
-            </Text>
-          </Pressable>
-
-          <Pressable
-            className="flex-row items-center justify-center rounded-xl bg-zinc-200 py-3.5 dark:bg-zinc-800"
-            onPress={() => {
-              logFeedback('edited', '');
-              // Navigate to add-part with pre-filled data
-              router.back();
+          />
+          <SecondaryButton
+            label="Edit Manually"
+            icon="pencil-outline"
+            onPress={() => { logFeedback('edited', ''); router.back(); }}
+          />
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              paddingVertical: 10, marginHorizontal: Spacing.md, marginVertical: 4, gap: 4,
             }}
-          >
-            <MaterialIcons name="edit" size={18} color="#71717a" />
-            <Text className="ml-2 text-base font-medium text-zinc-700 dark:text-zinc-300">
-              Edit Manually
-            </Text>
-          </Pressable>
-
-          <Pressable
-            className="flex-row items-center justify-center py-3"
             onPress={handleReject}
           >
-            <MaterialIcons name="close" size={18} color="#ef4444" />
-            <Text className="ml-1.5 text-base text-danger">Not a Match</Text>
-          </Pressable>
+            <Ionicons name="close" size={16} color={colors.statusOut} />
+            <Text style={{ fontSize: FontSize.sm, color: colors.statusOut }}>Not a Match</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </ScreenLayout>
   );
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const { colors } = useTheme();
   const pct = Math.round(confidence * 100);
-  const color =
-    pct >= 80
-      ? 'bg-green-100 text-green-700'
-      : pct >= 60
-        ? 'bg-yellow-100 text-yellow-700'
-        : 'bg-red-100 text-red-700';
+  const color = pct >= 80 ? colors.statusOk : pct >= 60 ? colors.accent : colors.statusOut;
+  const bg = pct >= 80 ? colors.statusOkBg : pct >= 60 ? colors.statusLowBg : colors.statusOutBg;
 
   return (
-    <View className={`rounded-full px-2 py-0.5 ${color.split(' ')[0]}`}>
-      <Text className={`text-xs font-semibold ${color.split(' ')[1]}`}>
-        {pct}%
-      </Text>
+    <View style={{ backgroundColor: bg, borderRadius: Radius.badge, paddingHorizontal: 6, paddingVertical: 2 }}>
+      <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color }}>{pct}%</Text>
     </View>
+  );
+}
+
+function AltPill({ label, pct, active, onPress }: { label: string; pct: number; active: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.75}
+      style={{
+        borderRadius: Radius.icon, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 0.5,
+        backgroundColor: active ? colors.accentBg : colors.bgCard,
+        borderColor: active ? colors.accentBorder : colors.borderDefault,
+      }}
+      onPress={onPress}
+    >
+      <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: active ? colors.accent : colors.textSecondary }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={{ fontSize: FontSize.xs, color: active ? colors.accent : colors.textMuted }}>{pct}%</Text>
+    </TouchableOpacity>
   );
 }
