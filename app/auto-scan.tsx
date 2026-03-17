@@ -22,8 +22,8 @@ const TRIGGER_MODES: { key: TriggerMode; label: string }[] = [
   { key: 'timer', label: 'Timer' },
 ];
 
-const CAPTURE_COOLDOWN = 3000;
-const STILLNESS_THRESHOLD = 1500;
+const STILLNESS_THRESHOLD = 1200; // ms of no motion before capture
+const MOTION_CHECK_INTERVAL = 400; // ms between motion checks
 const VIEWFINDER_SIZE = 220;
 
 export default function AutoScanScreen() {
@@ -57,7 +57,7 @@ export default function AutoScanScreen() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
-      // Persist unconfirmed scans when unmounting
+      stopMotionDetection();
       endSession();
     };
   }, []);
@@ -101,10 +101,75 @@ export default function AutoScanScreen() {
   const traceBottomOp = useRef(new Animated.Value(0)).current;
   const traceLeftOp = useRef(new Animated.Value(0)).current;
 
+  // ─── MOTION DETECTION via periodic snapshots ───
+  // After each capture, we take quick low-res snapshots every 400ms.
+  // Compare file sizes as a proxy for frame difference (different scene = different size).
+  // Motion detected → wait for stillness → trace → capture.
+  const referenceSize = useRef(0);
+  const stillnessStart = useRef(0);
+  const motionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoRunning = useRef(false);
+
+  const startMotionDetection = useCallback(() => {
+    if (motionCheckRef.current) clearInterval(motionCheckRef.current);
+    autoRunning.current = true;
+    setDetectPhase('waiting');
+    referenceSize.current = 0;
+    stillnessStart.current = 0;
+
+    motionCheckRef.current = setInterval(async () => {
+      if (!autoRunning.current || isCapturingRef.current || !cameraRef.current) return;
+
+      try {
+        // Take a tiny snapshot to detect changes
+        const snap = await cameraRef.current.takePictureAsync({ quality: 0.1 });
+        if (!snap) return;
+
+        // Use URI length as a rough proxy for image complexity/content
+        const currentSize = snap.uri.length + (snap.width ?? 0) * (snap.height ?? 0);
+
+        if (referenceSize.current === 0) {
+          // First frame — set as reference
+          referenceSize.current = currentSize;
+          return;
+        }
+
+        const diff = Math.abs(currentSize - referenceSize.current) / referenceSize.current;
+
+        if (diff > 0.05) {
+          // Motion detected — scene changed significantly
+          setDetectPhase('motion');
+          referenceSize.current = currentSize;
+          stillnessStart.current = 0;
+        } else {
+          // Scene is stable
+          if (stillnessStart.current === 0) {
+            stillnessStart.current = Date.now();
+            setDetectPhase('settling');
+          } else if (Date.now() - stillnessStart.current > STILLNESS_THRESHOLD) {
+            // Stable long enough — capture!
+            autoRunning.current = false;
+            if (motionCheckRef.current) clearInterval(motionCheckRef.current);
+            setDetectPhase('ready');
+            playTraceAndCapture();
+          }
+        }
+      } catch {
+        // Snapshot failed — continue
+      }
+    }, MOTION_CHECK_INTERVAL);
+  }, []);
+
+  const stopMotionDetection = () => {
+    autoRunning.current = false;
+    if (motionCheckRef.current) {
+      clearInterval(motionCheckRef.current);
+      motionCheckRef.current = null;
+    }
+  };
+
   const playTraceAndCapture = useCallback(() => {
     if (isCapturingRef.current || !cameraRef.current) return;
-    const now = Date.now();
-    if (now - lastCaptureTime.current < CAPTURE_COOLDOWN) return;
 
     setShowTrace(true);
     traceTopOp.setValue(0);
@@ -125,12 +190,9 @@ export default function AutoScanScreen() {
 
   const doCapture = useCallback(async () => {
     if (isCapturingRef.current || !cameraRef.current) return;
-    const now = Date.now();
-    if (now - lastCaptureTime.current < CAPTURE_COOLDOWN) return;
 
     isCapturingRef.current = true;
     setIsCapturing(true);
-    lastCaptureTime.current = now;
     Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
@@ -140,31 +202,26 @@ export default function AutoScanScreen() {
         addCapture(photo.uri);
 
         if (triggerMode === 'stillness') {
-          // Auto mode: skip NEXT ITEM, just wait cooldown then auto-capture again
-          setDetectPhase('settling');
-          motionDetectTimer.current = setTimeout(() => {
-            setDetectPhase('ready');
-            playTraceAndCapture();
-          }, CAPTURE_COOLDOWN);
+          // After capture, restart motion detection — will capture again
+          // when it detects a new item placed and held still
+          setTimeout(() => startMotionDetection(), 500);
         } else if (triggerMode !== 'timer') {
-          // Manual mode: show NEXT ITEM prompt
           setTimeout(() => showNextItemPrompt(), 500);
         }
-        // Timer mode: the interval handles the next capture automatically
       }
     } catch {
-      // Camera capture failed
+      // Camera capture failed — restart detection
+      if (triggerMode === 'stillness') startMotionDetection();
     } finally {
       isCapturingRef.current = false;
       setIsCapturing(false);
     }
-  }, [addCapture, triggerMode]);
+  }, [addCapture, triggerMode, startMotionDetection]);
 
   const handleViewfinderTap = () => {
     if (triggerMode === 'stillness' && !isCapturingRef.current) {
-      // First tap starts auto-scan immediately — trace then capture
-      setDetectPhase('ready');
-      playTraceAndCapture();
+      // First tap starts auto-scan — begin motion detection
+      startMotionDetection();
     }
   };
 
@@ -192,6 +249,7 @@ export default function AutoScanScreen() {
   const handleDone = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
+    stopMotionDetection();
     endSession();
     router.replace('/auto-scan-review' as any);
   };
@@ -288,8 +346,9 @@ export default function AutoScanScreen() {
           <View style={[s.phaseBadge, { backgroundColor: 'rgba(0,0,0,0.7)', marginTop: 12 }]}>
             <Text style={[s.phaseText, { color: viewfinderColor }]}>
               {triggerMode === 'stillness'
-                ? detectPhase === 'waiting' ? 'TAP TO START AUTO-SCAN'
-                : detectPhase === 'settling' ? 'NEXT CAPTURE IN 3S...'
+                ? detectPhase === 'waiting' ? 'WATCHING FOR MOTION...'
+                : detectPhase === 'motion' ? 'MOTION DETECTED'
+                : detectPhase === 'settling' ? 'HOLD STILL...'
                 : detectPhase === 'ready' ? 'CAPTURING...'
                 : 'AUTO-SCANNING'
               : triggerMode === 'timer'
