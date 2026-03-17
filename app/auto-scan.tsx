@@ -18,7 +18,7 @@ const Haptics = Platform.OS !== 'web'
 
 const TRIGGER_MODES: { key: TriggerMode; label: string }[] = [
   { key: 'manual', label: 'Manual' },
-  { key: 'stillness', label: 'Auto-Detect' },
+  { key: 'stillness', label: 'Auto' },
   { key: 'timer', label: 'Timer' },
 ];
 
@@ -134,9 +134,21 @@ export default function AutoScanScreen() {
       if (photo) {
         flashViewfinder();
         addCapture(photo.uri);
+        // Show "NEXT ITEM" then auto-restart cycle in Auto mode
         setTimeout(() => {
           showNextItemPrompt();
-          if (triggerMode === 'stillness') setDetectPhase('waiting');
+          if (triggerMode === 'stillness') {
+            setDetectPhase('waiting');
+            // Auto-restart: after cooldown, begin next capture cycle automatically
+            motionDetectTimer.current = setTimeout(() => {
+              setDetectPhase('motion');
+              setTimeout(() => setDetectPhase('settling'), 300);
+              motionDetectTimer.current = setTimeout(() => {
+                setDetectPhase('ready');
+                playTraceAndCapture();
+              }, STILLNESS_THRESHOLD);
+            }, CAPTURE_COOLDOWN);
+          }
         }, 500);
       }
     } catch {
@@ -203,10 +215,11 @@ export default function AutoScanScreen() {
     );
   }
 
+  // All blues — no green. Brighter = closer to capture
   const viewfinderColor =
-    detectPhase === 'motion' ? colors.statusOut :
-    detectPhase === 'settling' ? colors.statusLow :
-    detectPhase === 'ready' ? colors.statusOk :
+    detectPhase === 'motion' ? colors.textSecondary :
+    detectPhase === 'settling' ? colors.accent :
+    detectPhase === 'ready' ? colors.textPrimary :
     colors.accent;
 
   // Trace uses opacity-based animation (4 full-length segments that fade in sequentially)
@@ -273,14 +286,14 @@ export default function AutoScanScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* "NEXT ITEM" — OUTSIDE viewfinder so it can't shift layout */}
+          {/* "NEXT ITEM" — absolutely positioned over the center, no layout shift */}
           {showNextItem && (
-            <Animated.View style={[s.nextItemFloat, { opacity: nextItemAnim }]}>
+            <Animated.View style={[s.nextItemAbsolute, { opacity: nextItemAnim }]} pointerEvents="none">
               <View style={[s.nextItemBox, { backgroundColor: 'rgba(0,0,0,0.85)', borderColor: colors.accent }]}>
                 <Ionicons name="arrow-down" size={24} color={colors.accent} />
                 <Text style={[s.nextItemText, { color: colors.accent }]}>NEXT ITEM</Text>
                 <Text style={[s.nextItemSub, { color: '#fff' }]}>
-                  {triggerMode === 'stillness' ? 'Place item & hold still' : 'Place next item in frame'}
+                  {triggerMode === 'stillness' ? 'Place next item — auto-captures' : 'Place next item in frame'}
                 </Text>
               </View>
             </Animated.View>
@@ -363,8 +376,8 @@ const s = StyleSheet.create({
   traceBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, zIndex: 5 },
   traceLeft: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, zIndex: 5 },
   flashOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 4 },
-  // "NEXT ITEM" floats below viewfinder — never inside it
-  nextItemFloat: { marginTop: 12 },
+  // "NEXT ITEM" absolutely positioned — overlays center without shifting layout
+  nextItemAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   nextItemBox: { alignItems: 'center', padding: 16, borderRadius: 4, borderWidth: 2, gap: 6 },
   nextItemText: { fontSize: 24, fontWeight: '800', letterSpacing: 0.5 },
   nextItemSub: { fontSize: 14, textAlign: 'center' },

@@ -273,14 +273,6 @@ export function VaultSplash({ onComplete, children }: Props) {
         {/* Centre content */}
         <View style={styles.centre}>
 
-          {/* SCAN TRACE — accent edges around the vault door */}
-          <View style={{ width: DOOR_SIZE + 8, height: DOOR_SIZE + 8, position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
-            <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#00c8e8', opacity: scanTraceTop }} />
-            <Animated.View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 2, backgroundColor: '#00c8e8', opacity: scanTraceRight }} />
-            <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: '#00c8e8', opacity: scanTraceBottom }} />
-            <Animated.View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 2, backgroundColor: '#00c8e8', opacity: scanTraceLeft }} />
-          </View>
-
           {/* VAULT DOOR */}
           <Animated.View style={{
             opacity: doorOpacity,
@@ -362,11 +354,18 @@ export function VaultSplash({ onComplete, children }: Props) {
             </Animated.View>
           </Animated.View>
 
-          {/* APP NAME */}
+          {/* APP NAME with scan trace frame */}
           <Animated.View style={[styles.nameArea, {
             opacity: nameOpacity,
             transform: [{ translateY: nameTranslateY }],
           }]}>
+            {/* Scan trace — electric blue spark around the name */}
+            <View style={styles.scanTraceFrame}>
+              <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#00c8e8', opacity: scanTraceTop }} />
+              <Animated.View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 2, backgroundColor: '#00c8e8', opacity: scanTraceRight }} />
+              <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: '#00c8e8', opacity: scanTraceBottom }} />
+              <Animated.View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 2, backgroundColor: '#00c8e8', opacity: scanTraceLeft }} />
+            </View>
             <Text style={styles.appName}>
               Maker<Text style={styles.appNameAccent}>Vault</Text>
             </Text>
@@ -487,7 +486,7 @@ const styles = StyleSheet.create({
   cornerTR: { top: 48, right: 28, borderTopWidth: 2, borderRightWidth: 2 },
   cornerBL: { bottom: 48, left: 28, borderBottomWidth: 2, borderLeftWidth: 2 },
   cornerBR: { bottom: 48, right: 28, borderBottomWidth: 2, borderRightWidth: 2 },
-  centre: { alignItems: 'center', justifyContent: 'center' },
+  centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   door: {
     width: DOOR_SIZE, height: DOOR_SIZE,
     backgroundColor: '#0a1820',
@@ -584,7 +583,8 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 4,
     borderRadius: 1,
   },
-  nameArea: { alignItems: 'center', marginTop: 38 },
+  nameArea: { alignItems: 'center', marginTop: 38, position: 'relative', paddingHorizontal: 24, paddingVertical: 16 },
+  scanTraceFrame: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   appName: { fontSize: 36, fontWeight: '800', letterSpacing: -0.5, color: '#e8f8fc' },
   appNameAccent: { color: '#00c8e8' },
   tagline: { fontSize: 9, color: '#3a7888', letterSpacing: 0.2, marginTop: 6 },

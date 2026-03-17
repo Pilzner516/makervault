@@ -63,7 +63,16 @@ export default function HomeScreen() {
 
       <StatStrip>
         <StatTile value={totalParts} label="Parts" onPress={() => router.push('/(tabs)/inventory')} />
-        <StatTile value={totalProjects} label="Projects" onPress={() => router.push('/(tabs)/projects')} />
+        {unconfirmedCount > 0 ? (
+          <StatTile
+            value={unconfirmedCount}
+            label="Pending"
+            color={colors.accent}
+            onPress={() => router.push('/auto-scan-review' as any)}
+          />
+        ) : (
+          <StatTile value={totalProjects} label="Projects" onPress={() => router.push('/(tabs)/projects')} />
+        )}
         <StatTile value={lowStockCount} label="Alerts" color={lowStockCount > 0 ? colors.statusOut : undefined} />
       </StatStrip>
 
