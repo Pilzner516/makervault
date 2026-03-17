@@ -499,7 +499,7 @@ export function ModeButton({ label, active, onPress }: PillProps) {
     <TouchableOpacity onPress={onPress} activeOpacity={0.75}
       style={[styles.modeBtn, { backgroundColor: colors.bgDeep, borderColor: colors.borderDefault },
         active && { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
-      <Text style={[styles.modeBtnText, { color: colors.textMuted }, active && { color: colors.accent }]}>
+      <Text numberOfLines={1} style={[styles.modeBtnText, { color: colors.textMuted }, active && { color: colors.accent }]}>
         {label.toUpperCase()}
       </Text>
     </TouchableOpacity>
@@ -823,7 +823,7 @@ const styles = StyleSheet.create({
   pill: { borderWidth:1, borderRadius:3, paddingHorizontal:8, paddingVertical:3 },
   pillText: { fontSize:14, fontWeight:'700', letterSpacing:0.04 },
   // Mode btn — 48px tap target, 15px text
-  modeBtn: { flex:1, borderWidth:1, borderRadius:4, paddingVertical:8, alignItems:'center', justifyContent:'center', minHeight:36 },
+  modeBtn: { flex:1, borderWidth:1, borderRadius:4, paddingVertical:8, paddingHorizontal:4, alignItems:'center', justifyContent:'center', minHeight:36 },
   modeBtnText: { fontSize:14, fontWeight:'700', letterSpacing:0.04 },
   // Alert
   alert: { flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:12, borderTopWidth:2, borderBottomWidth:1, gap:10 },

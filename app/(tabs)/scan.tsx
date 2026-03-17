@@ -22,7 +22,7 @@ type ScanMode = 'ai' | 'bulk' | 'auto' | 'barcode' | 'manual';
 const MODES: { key: ScanMode; label: string }[] = [
   { key: 'ai', label: 'Single' },
   { key: 'bulk', label: 'Multi' },
-  { key: 'auto', label: 'Auto-Scan' },
+  { key: 'auto', label: 'Auto' },
   { key: 'barcode', label: 'Barcode' },
 ];
 

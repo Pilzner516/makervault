@@ -46,7 +46,7 @@ export default function AutoScanScreen() {
 
   const {
     captures, triggerMode, timerInterval,
-    startSession, addCapture,
+    startSession, endSession, addCapture,
     setTriggerMode, loadTriggerPrefs,
   } = useAutoScanStore();
 
@@ -56,6 +56,8 @@ export default function AutoScanScreen() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
+      // Persist unconfirmed scans when unmounting
+      endSession();
     };
   }, []);
 
@@ -183,8 +185,8 @@ export default function AutoScanScreen() {
           : 'Your scans are saved. You can review them later.',
         [
           { text: 'Keep scanning', style: 'cancel' },
-          { text: 'Review now', onPress: () => router.replace('/auto-scan-review' as any) },
-          { text: 'Go home', onPress: () => router.back() },
+          { text: 'Review now', onPress: () => { endSession(); router.replace('/auto-scan-review' as any); } },
+          { text: 'Go home', onPress: () => { endSession(); router.back(); } },
         ]
       );
     } else {
@@ -195,6 +197,7 @@ export default function AutoScanScreen() {
   const handleDone = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
+    endSession();
     router.replace('/auto-scan-review' as any);
   };
 
@@ -263,30 +266,33 @@ export default function AutoScanScreen() {
 
         {/* Viewfinder — ALWAYS CENTERED via flex:1 wrapper */}
         <View style={s.centerArea}>
-          <TouchableOpacity activeOpacity={1} onPress={triggerMode === 'stillness' ? handleViewfinderTap : triggerMode === 'manual' ? doCapture : undefined}>
-            <View style={[s.viewfinder, { borderColor: viewfinderColor }]}>
-              {/* Corner markers */}
-              <View style={[s.corner, { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
-              <View style={[s.corner, { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
-              <View style={[s.corner, { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
-              <View style={[s.corner, { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
+          {/* Fixed-size viewfinder container — NEVER changes size */}
+          <View style={s.viewfinderContainer}>
+            <TouchableOpacity activeOpacity={1} onPress={triggerMode === 'stillness' ? handleViewfinderTap : triggerMode === 'manual' ? doCapture : undefined}>
+              <View style={[s.viewfinder, { borderColor: viewfinderColor }]}>
+                {/* Corner markers */}
+                <View style={[s.corner, { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
+                <View style={[s.corner, { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
+                <View style={[s.corner, { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
+                <View style={[s.corner, { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
 
-              {/* Trace animation — 4 full-length edge segments that fade in sequentially */}
-              {showTrace && (
-                <>
-                  <Animated.View style={[s.traceTop, { opacity: traceTopOp, backgroundColor: colors.accent }]} />
-                  <Animated.View style={[s.traceRight, { opacity: traceRightOp, backgroundColor: colors.accent }]} />
-                  <Animated.View style={[s.traceBottom, { opacity: traceBottomOp, backgroundColor: colors.accent }]} />
-                  <Animated.View style={[s.traceLeft, { opacity: traceLeftOp, backgroundColor: colors.accent }]} />
-                </>
-              )}
+                {/* Trace animation — 4 full-length edge segments that fade in sequentially */}
+                {showTrace && (
+                  <>
+                    <Animated.View style={[s.traceTop, { opacity: traceTopOp, backgroundColor: colors.accent }]} />
+                    <Animated.View style={[s.traceRight, { opacity: traceRightOp, backgroundColor: colors.accent }]} />
+                    <Animated.View style={[s.traceBottom, { opacity: traceBottomOp, backgroundColor: colors.accent }]} />
+                    <Animated.View style={[s.traceLeft, { opacity: traceLeftOp, backgroundColor: colors.accent }]} />
+                  </>
+                )}
 
-              {/* Flash overlay */}
-              <Animated.View style={[s.flashOverlay, { opacity: flashAnim, backgroundColor: colors.accent }]} />
-            </View>
-          </TouchableOpacity>
+                {/* Flash overlay */}
+                <Animated.View style={[s.flashOverlay, { opacity: flashAnim, backgroundColor: colors.accent }]} />
+              </View>
+            </TouchableOpacity>
+          </View>
 
-          {/* "NEXT ITEM" — absolutely positioned over the center, no layout shift */}
+          {/* ALL overlays absolutely positioned — no layout shift */}
           {showNextItem && (
             <Animated.View style={[s.nextItemAbsolute, { opacity: nextItemAnim }]} pointerEvents="none">
               <View style={[s.nextItemBox, { backgroundColor: 'rgba(0,0,0,0.85)', borderColor: colors.accent }]}>
@@ -299,8 +305,8 @@ export default function AutoScanScreen() {
             </Animated.View>
           )}
 
-          {/* Phase label */}
-          <View style={[s.phaseBadge, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+          {/* Phase label — absolutely positioned */}
+          <View style={[s.phaseBadge, s.phaseBadgePosition, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
             <Text style={[s.phaseText, { color: viewfinderColor }]}>
               {triggerMode === 'stillness'
                 ? detectPhase === 'waiting' ? 'TAP VIEWFINDER WHEN READY'
@@ -314,7 +320,7 @@ export default function AutoScanScreen() {
           </View>
 
           {processingCount > 0 && (
-            <View style={[s.processingBadge, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+            <View style={[s.processingBadge, s.processingBadgePosition, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
               <ActivityIndicator size="small" color={colors.accent} />
               <Text style={{ fontSize: 14, fontWeight: '600', color: colors.accent }}>PROCESSING {processingCount}...</Text>
             </View>
@@ -367,7 +373,8 @@ const s = StyleSheet.create({
   countBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 4, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   triggerRow: { flexDirection: 'row', marginHorizontal: 12, gap: 6 },
   // centerArea uses flex:1 to fill middle space, keeping viewfinder perfectly centered
-  centerArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  centerArea: { flex: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  viewfinderContainer: { width: VIEWFINDER_SIZE, height: VIEWFINDER_SIZE },
   viewfinder: { width: VIEWFINDER_SIZE, height: VIEWFINDER_SIZE, borderWidth: 2, borderRadius: 4, position: 'relative', overflow: 'hidden' },
   corner: { position: 'absolute', width: 28, height: 28, borderStyle: 'solid', borderWidth: 0 },
   // Trace — 4 full-length edge lines, each fades in via opacity
@@ -381,9 +388,11 @@ const s = StyleSheet.create({
   nextItemBox: { alignItems: 'center', padding: 16, borderRadius: 4, borderWidth: 2, gap: 6 },
   nextItemText: { fontSize: 24, fontWeight: '800', letterSpacing: 0.5 },
   nextItemSub: { fontSize: 14, textAlign: 'center' },
-  phaseBadge: { marginTop: 10, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 4 },
+  phaseBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 4 },
+  phaseBadgePosition: { position: 'absolute', bottom: 24, alignSelf: 'center' },
   phaseText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.05, textAlign: 'center' },
-  processingBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 4 },
+  processingBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 4 },
+  processingBadgePosition: { position: 'absolute', bottom: 4, alignSelf: 'center' },
   thumbStrip: { paddingHorizontal: 12, gap: 6, paddingVertical: 4 },
   thumbWrap: { position: 'relative' },
   thumb: { width: 52, height: 52, borderRadius: 4 },
