@@ -138,22 +138,19 @@ export default function AutoScanScreen() {
       if (photo) {
         flashViewfinder();
         addCapture(photo.uri);
-        // Show "NEXT ITEM" then auto-restart cycle in Auto mode
-        setTimeout(() => {
-          showNextItemPrompt();
-          if (triggerMode === 'stillness') {
-            setDetectPhase('waiting');
-            // Auto-restart: after cooldown, begin next capture cycle automatically
-            motionDetectTimer.current = setTimeout(() => {
-              setDetectPhase('motion');
-              setTimeout(() => setDetectPhase('settling'), 300);
-              motionDetectTimer.current = setTimeout(() => {
-                setDetectPhase('ready');
-                playTraceAndCapture();
-              }, STILLNESS_THRESHOLD);
-            }, CAPTURE_COOLDOWN);
-          }
-        }, 500);
+
+        if (triggerMode === 'stillness') {
+          // Auto mode: skip NEXT ITEM, just wait cooldown then auto-capture again
+          setDetectPhase('settling');
+          motionDetectTimer.current = setTimeout(() => {
+            setDetectPhase('ready');
+            playTraceAndCapture();
+          }, CAPTURE_COOLDOWN);
+        } else if (triggerMode !== 'timer') {
+          // Manual mode: show NEXT ITEM prompt
+          setTimeout(() => showNextItemPrompt(), 500);
+        }
+        // Timer mode: the interval handles the next capture automatically
       }
     } catch {
       // Camera capture failed
@@ -164,15 +161,10 @@ export default function AutoScanScreen() {
   }, [addCapture, triggerMode]);
 
   const handleViewfinderTap = () => {
-    if (triggerMode === 'stillness' && !isCapturing) {
-      setDetectPhase('motion');
-      setShowNextItem(false);
-      if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
-      setTimeout(() => setDetectPhase('settling'), 300);
-      motionDetectTimer.current = setTimeout(() => {
-        setDetectPhase('ready');
-        playTraceAndCapture();
-      }, STILLNESS_THRESHOLD);
+    if (triggerMode === 'stillness' && !isCapturingRef.current) {
+      // First tap starts auto-scan immediately — trace then capture
+      setDetectPhase('ready');
+      playTraceAndCapture();
     }
   };
 
@@ -296,10 +288,10 @@ export default function AutoScanScreen() {
           <View style={[s.phaseBadge, { backgroundColor: 'rgba(0,0,0,0.7)', marginTop: 12 }]}>
             <Text style={[s.phaseText, { color: viewfinderColor }]}>
               {triggerMode === 'stillness'
-                ? detectPhase === 'waiting' ? 'TAP VIEWFINDER WHEN READY'
-                : detectPhase === 'motion' ? 'MOTION DETECTED...'
-                : detectPhase === 'settling' ? 'HOLD STILL...'
-                : 'CAPTURING!'
+                ? detectPhase === 'waiting' ? 'TAP TO START AUTO-SCAN'
+                : detectPhase === 'settling' ? 'NEXT CAPTURE IN 3S...'
+                : detectPhase === 'ready' ? 'CAPTURING...'
+                : 'AUTO-SCANNING'
               : triggerMode === 'timer'
                 ? `AUTO · EVERY ${timerInterval}S`
                 : 'TAP VIEWFINDER TO CAPTURE'}
@@ -314,15 +306,12 @@ export default function AutoScanScreen() {
           )}
         </View>
 
-        {/* NEXT ITEM — absolute overlay on entire screen, no layout impact */}
-        {showNextItem && (
+        {/* NEXT ITEM — only in manual mode, briefly */}
+        {showNextItem && triggerMode === 'manual' && (
           <Animated.View style={[s.fullScreenOverlay, { opacity: nextItemAnim }]} pointerEvents="none">
             <View style={[s.nextItemBox, { backgroundColor: 'rgba(0,0,0,0.85)', borderColor: colors.accent }]}>
               <Ionicons name="arrow-down" size={24} color={colors.accent} />
               <Text style={[s.nextItemText, { color: colors.accent }]}>NEXT ITEM</Text>
-              <Text style={[s.nextItemSub, { color: '#fff' }]}>
-                {triggerMode === 'stillness' ? 'Place next item — auto-captures' : 'Place next item in frame'}
-              </Text>
             </View>
           </Animated.View>
         )}
