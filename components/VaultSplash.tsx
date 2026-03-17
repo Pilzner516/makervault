@@ -28,8 +28,16 @@ import {
   View, Text, StyleSheet, Animated, Dimensions,
   StatusBar, Easing,
 } from 'react-native';
-// LinearGradient requires a native module — disabled until dev build includes it
-const LinearGradient: React.ComponentType<any> | null = null;
+// Auto-detect LinearGradient native module
+let LinearGradient: React.ComponentType<any> | null = null;
+try {
+  const mod = require('expo-linear-gradient');
+  const { UIManager, Platform } = require('react-native');
+  const hasNative = Platform.OS === 'web' ||
+    UIManager.getViewManagerConfig?.('ExpoLinearGradient') != null ||
+    UIManager['ExpoLinearGradient'] != null;
+  if (hasNative) LinearGradient = mod.LinearGradient;
+} catch {}
 
 const { width: W, height: H } = Dimensions.get('window');
 const DOOR_SIZE = Math.min(W * 0.52, 200);
@@ -62,6 +70,11 @@ export function VaultSplash({ onComplete, children }: Props) {
   const homeOpacity     = useRef(new Animated.Value(0)).current;
   const splashOpacity   = useRef(new Animated.Value(1)).current;
   const versionOpacity  = useRef(new Animated.Value(0)).current;
+  // Scan trace — accent line traces around the vault door frame
+  const scanTraceTop    = useRef(new Animated.Value(0)).current;
+  const scanTraceRight  = useRef(new Animated.Value(0)).current;
+  const scanTraceBottom = useRef(new Animated.Value(0)).current;
+  const scanTraceLeft   = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // ── SEQUENCE ──────────────────────────────────────────────────────────────
@@ -87,6 +100,15 @@ export function VaultSplash({ onComplete, children }: Props) {
       Animated.spring(doorTranslateY, {
         toValue: 0, tension: 120, friction: 8, delay: 700, useNativeDriver: true,
       }),
+    ]).start();
+
+    // 700ms: scan trace around the vault door frame
+    Animated.sequence([
+      Animated.delay(700),
+      Animated.timing(scanTraceTop, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(scanTraceRight, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(scanTraceBottom, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(scanTraceLeft, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
 
     // 900ms: dial combination spin — left 120, right -80, left 200, settle
@@ -250,6 +272,14 @@ export function VaultSplash({ onComplete, children }: Props) {
 
         {/* Centre content */}
         <View style={styles.centre}>
+
+          {/* SCAN TRACE — accent edges around the vault door */}
+          <View style={{ width: DOOR_SIZE + 8, height: DOOR_SIZE + 8, position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#00c8e8', opacity: scanTraceTop }} />
+            <Animated.View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 2, backgroundColor: '#00c8e8', opacity: scanTraceRight }} />
+            <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: '#00c8e8', opacity: scanTraceBottom }} />
+            <Animated.View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 2, backgroundColor: '#00c8e8', opacity: scanTraceLeft }} />
+          </View>
 
           {/* VAULT DOOR */}
           <Animated.View style={{

@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useEffect, useState } from 'react';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,7 @@ import type { WishlistItem } from '@/lib/types';
 
 export default function ReorderScreen() {
   const { mpn, name } = useLocalSearchParams<{ mpn: string; name: string }>();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +64,7 @@ export default function ReorderScreen() {
     return (
       <ScreenLayout style={{ paddingTop: insets.top }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader title="Price Compare" />
+        <ScreenHeader title="Price Compare" backLabel="Back" onBack={() => router.back()} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl }}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={{ fontSize: FontSize.md, color: colors.textMuted, marginTop: Spacing.md, textAlign: 'center' }}>
@@ -78,7 +79,7 @@ export default function ReorderScreen() {
     return (
       <ScreenLayout style={{ paddingTop: insets.top }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader title="Price Compare" />
+        <ScreenHeader title="Price Compare" backLabel="Back" onBack={() => router.back()} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl }}>
           <Ionicons name="storefront-outline" size={48} color={colors.textFaint} />
           <Text style={{ fontSize: FontSize.md, color: colors.textMuted, marginTop: Spacing.md, textAlign: 'center', marginBottom: Spacing.xl }}>
@@ -109,7 +110,7 @@ export default function ReorderScreen() {
   return (
     <ScreenLayout style={{ paddingTop: insets.top }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title="Price Compare" />
+      <ScreenHeader title="Price Compare" backLabel="Back" onBack={() => router.back()} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}

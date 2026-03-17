@@ -66,7 +66,8 @@ export default function ConfirmScreen() {
 
         // Generate a small thumbnail for DB storage
         try {
-          const thumb = await createThumbnailDataUri(uri);
+          // Use the ORIGINAL camera image for the thumbnail, not the compressed scan image
+          const thumb = await createThumbnailDataUri(imageUri);
           setThumbnailUri(thumb);
         } catch {
           // Continue without thumbnail

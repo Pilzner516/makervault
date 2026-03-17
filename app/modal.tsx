@@ -74,7 +74,14 @@ export default function SettingsScreen() {
   return (
     <ScreenLayout style={{ paddingTop: insets.top }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title="Settings" />
+      <ScreenHeader
+        title="Settings"
+        rightElement={
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="close" size={24} color={colors.textMuted} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
 

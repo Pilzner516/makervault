@@ -17,13 +17,13 @@ const Haptics = Platform.OS !== 'web'
 
 const isExpoGo = Constants.appOwnership === 'expo';
 
-type ScanMode = 'ai' | 'bulk' | 'barcode' | 'manual';
+type ScanMode = 'ai' | 'bulk' | 'auto' | 'barcode' | 'manual';
 
 const MODES: { key: ScanMode; label: string }[] = [
-  { key: 'ai', label: 'AI Identify' },
+  { key: 'ai', label: 'Single' },
   { key: 'bulk', label: 'Multi' },
+  { key: 'auto', label: 'Auto-Scan' },
   { key: 'barcode', label: 'Barcode' },
-  { key: 'manual', label: 'Manual' },
 ];
 
 export default function ScanScreen() {
@@ -127,7 +127,13 @@ export default function ScanScreen() {
               key={m.key}
               label={m.label}
               active={mode === m.key}
-              onPress={() => setMode(m.key)}
+              onPress={() => {
+                if (m.key === 'auto') {
+                  router.push('/auto-scan' as any);
+                } else {
+                  setMode(m.key);
+                }
+              }}
             />
           ))}
         </View>

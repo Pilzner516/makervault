@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -24,6 +24,7 @@ import { QRCodeLabel } from '@/components/QRCodeLabel';
 import type { StorageLocation, Part } from '@/lib/types';
 
 export default function LocationsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [locations, setLocations] = useState<StorageLocation[]>([]);
@@ -168,7 +169,7 @@ export default function LocationsScreen() {
   return (
     <ScreenLayout style={{ paddingTop: insets.top }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenHeader title="Storage Locations" subtitle={`${locations.length} locations`} />
+      <ScreenHeader title="Storage Locations" subtitle={`${locations.length} locations`} backLabel="Close" onBack={() => router.back()} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
         {locations.length === 0 && !isLoading ? (

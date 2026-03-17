@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +10,9 @@ import {
 import { useTheme } from '@/context/ThemeContext';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { getLowStockParts } from '@/lib/notifications';
-import { isSupabaseConfigured } from '@/lib/supabase';
-import { isVoiceAvailable, startRecognition, setupVoiceListeners } from '@/lib/voice';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { isVoiceAvailable, startRecognition } from '@/lib/voice';
+import { useAutoScanStore } from '@/lib/zustand/autoScanStore';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -28,7 +29,18 @@ export default function HomeScreen() {
   const lowStockParts = useMemo(() => getLowStockParts(parts), [parts]);
   const totalParts = parts.length;
   const lowStockCount = lowStockParts.length;
-  const totalProjects = 0;
+  const [totalProjects, setTotalProjects] = useState(0);
+  const { loadUnconfirmed, hasUnconfirmed, captures: autoCaptures } = useAutoScanStore();
+  const unconfirmedCount = autoCaptures.filter((c) => !c.confirmed && !c.discarded && c.status === 'done').length;
+
+  useEffect(() => {
+    supabase
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .then(({ count }) => { if (count != null) setTotalProjects(count); });
+    // Check for unconfirmed scans from previous session
+    loadUnconfirmed();
+  }, []);
 
   const handleVoice = useCallback(() => {
     if (isVoiceAvailable()) {
@@ -54,6 +66,16 @@ export default function HomeScreen() {
         <StatTile value={totalProjects} label="Projects" onPress={() => router.push('/(tabs)/projects')} />
         <StatTile value={lowStockCount} label="Alerts" color={lowStockCount > 0 ? colors.statusOut : undefined} />
       </StatStrip>
+
+      {/* Unconfirmed scans alert */}
+      {unconfirmedCount > 0 && (
+        <AlertBanner
+          title={`${unconfirmedCount} unconfirmed scan${unconfirmedCount !== 1 ? 's' : ''} to review`}
+          subtitle="Tap to review and save to inventory"
+          variant="warn"
+          onPress={() => router.push('/auto-scan-review' as any)}
+        />
+      )}
 
       {lowStockCount > 0 && (
         <AlertBanner

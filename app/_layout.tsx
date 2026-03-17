@@ -46,6 +46,9 @@ function AppLayout() {
         <Stack.Screen name="locations" options={{ presentation: 'modal', title: 'Storage Locations', headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
         <Stack.Screen name="modal"     options={{ presentation: 'modal', title: 'Settings',          headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
         <Stack.Screen name="where-to-buy" options={{ title: 'Where to Buy', headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
+        <Stack.Screen name="category/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="auto-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="auto-scan-review" options={{ headerShown: false }} />
         <Stack.Screen name="all-suppliers" options={{ title: 'All Suppliers', headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
       </Stack>
       {/* VoiceFAB removed — voice is now a launcher card on Home */}

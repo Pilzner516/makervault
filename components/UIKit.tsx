@@ -17,9 +17,20 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Image as RNImage,
   TextInput, ScrollView, ViewStyle, StatusBar, Platform,
 } from 'react-native';
-// LinearGradient: FORCE DISABLED — current dev build lacks native module.
-// Re-enable after rebuilding with: npx eas build --profile development --platform android
-const _LG: React.ComponentType<any> | null = null;
+// LinearGradient: auto-detect native module availability
+let _LG: React.ComponentType<any> | null = null;
+try {
+  const mod = require('expo-linear-gradient');
+  // Only enable if the native view manager is actually registered
+  const { UIManager, Platform } = require('react-native');
+  const viewName = 'ExpoLinearGradient';
+  const hasNative = Platform.OS === 'web' ||
+    UIManager.getViewManagerConfig?.(viewName) != null ||
+    UIManager[viewName] != null;
+  if (hasNative) _LG = mod.LinearGradient;
+} catch {
+  // Not available
+}
 
 function SafeGradient(props: { colors: string[]; start?: any; end?: any; style?: any; children?: React.ReactNode }) {
   if (_LG) {
@@ -179,7 +190,10 @@ export function LogoHeader({ subtitle = 'Workshop OS', rightElement }: LogoHeade
             <LogoMark color={colors.accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.logoName, { color: colors.textPrimary }]}>MakerVault</Text>
+            <Text style={styles.logoName}>
+              <Text style={{ color: colors.textPrimary }}>Maker</Text>
+              <Text style={{ color: colors.accent }}>Vault</Text>
+            </Text>
             <Text style={[styles.logoSub, { color: colors.textFaint }]}>{subtitle.toUpperCase()}</Text>
           </View>
           {rightElement}
@@ -805,12 +819,12 @@ const styles = StyleSheet.create({
   crosshairH: { position:'absolute', top:6, left:0, right:0, height:0.5, borderRadius:1 },
   crosshairV: { position:'absolute', left:6, top:0, bottom:0, width:0.5, borderRadius:1 },
   // Pills
-  pillRow: { paddingHorizontal:12, paddingBottom:8, gap:6, flexDirection:'row' },
-  pill: { borderWidth:1, borderRadius:3, paddingHorizontal:12, paddingVertical:8, minHeight:36 },
+  pillRow: { paddingHorizontal:12, paddingTop:2, paddingBottom:4, gap:5, flexDirection:'row' },
+  pill: { borderWidth:1, borderRadius:3, paddingHorizontal:8, paddingVertical:3 },
   pillText: { fontSize:14, fontWeight:'700', letterSpacing:0.04 },
   // Mode btn — 48px tap target, 15px text
-  modeBtn: { flex:1, borderWidth:1, borderRadius:4, paddingVertical:14, alignItems:'center', justifyContent:'center', minHeight:48 },
-  modeBtnText: { fontSize:15, fontWeight:'700', letterSpacing:0.04 },
+  modeBtn: { flex:1, borderWidth:1, borderRadius:4, paddingVertical:8, alignItems:'center', justifyContent:'center', minHeight:36 },
+  modeBtnText: { fontSize:14, fontWeight:'700', letterSpacing:0.04 },
   // Alert
   alert: { flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:12, borderTopWidth:2, borderBottomWidth:1, gap:10 },
   alertBar: { width:4, height:32, borderRadius:0, flexShrink:0 },

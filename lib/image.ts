@@ -60,14 +60,15 @@ export async function preprocessImage(uri: string, opts?: ImageQualityOptions): 
 }
 
 /**
- * Create a tiny thumbnail data URI suitable for storing in the database.
- * 200px wide, 25% JPEG quality → typically 5-15KB as base64.
+ * Create a quality thumbnail from the ORIGINAL camera image (not the
+ * compressed scan image). 480px wide at 70% JPEG → typically 20-40KB.
+ * This is what the user sees in inventory and part detail — must look good.
  */
 export async function createThumbnailDataUri(uri: string): Promise<string> {
   const thumb = await ImageManipulator.manipulateAsync(
     uri,
-    [{ resize: { width: 200 } }],
-    { compress: 0.25, format: ImageManipulator.SaveFormat.JPEG }
+    [{ resize: { width: 480 } }],
+    { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
   );
 
   let base64: string;

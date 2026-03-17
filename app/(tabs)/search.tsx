@@ -1,31 +1,24 @@
-import { View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { View, Text, ScrollView, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ScreenLayout, ScreenHeader, SearchBar,
   EngravingLabel, PanelCard, ItemRow, EmptyState,
-  Spacing,
 } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
+import { supabase } from '@/lib/supabase';
 import type { Part } from '@/lib/types';
 
-interface CategoryCard {
+interface DbCategory {
+  id: string;
   name: string;
   icon: string;
-  filter: string;
+  colour: string;
+  sort_order: number;
 }
-
-const CATEGORIES: CategoryCard[] = [
-  { name: 'Fasteners', icon: 'build-outline', filter: 'fastener' },
-  { name: 'Electronics', icon: 'pulse-outline', filter: 'electronic' },
-  { name: 'Tools', icon: 'hammer-outline', filter: 'tool' },
-  { name: '3D Printing', icon: 'print-outline', filter: '3d print' },
-  { name: 'Materials', icon: 'layers-outline', filter: 'material' },
-  { name: 'Cables', icon: 'git-merge-outline', filter: 'cable' },
-];
 
 function getAbbr(text: string): string {
   const abbrs: Record<string, string> = {
@@ -47,6 +40,20 @@ export default function SearchScreen() {
   const { colors } = useTheme();
   const { parts } = useInventoryStore();
   const [query, setQuery] = useState('');
+  const [categories, setCategories] = useState<DbCategory[]>([]);
+  const [loadingCats, setLoadingCats] = useState(true);
+
+  // Fetch categories from Supabase
+  useEffect(() => {
+    supabase
+      .from('categories')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => {
+        if (data) setCategories(data as DbCategory[]);
+        setLoadingCats(false);
+      });
+  }, []);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -62,18 +69,11 @@ export default function SearchScreen() {
     );
   }, [parts, query]);
 
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const cat of CATEGORIES) {
-      counts[cat.filter] = parts.filter(
-        (p) => p.category?.toLowerCase().includes(cat.filter) || p.name.toLowerCase().includes(cat.filter)
-      ).length;
-    }
-    return counts;
-  }, [parts]);
-
-  const handleCategoryPress = (filter: string) => {
-    setQuery(filter);
+  const getCatCount = (catName: string) => {
+    const lower = catName.toLowerCase();
+    return parts.filter(
+      (p) => p.category?.toLowerCase().includes(lower) || p.name.toLowerCase().includes(lower)
+    ).length;
   };
 
   const isSearching = query.trim().length > 0;
@@ -82,6 +82,7 @@ export default function SearchScreen() {
     ({ item }: { item: Part }) => (
       <ItemRow
         iconLabel={getAbbr(item.category ?? item.name)}
+        imageUri={item.image_url ?? undefined}
         name={item.name}
         meta={[item.category, item.manufacturer].filter(Boolean).join(' · ') || undefined}
         rightText={String(item.quantity)}
@@ -106,40 +107,34 @@ export default function SearchScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
           <EngravingLabel label="Browse by category" />
 
-          <View style={s.grid}>
-            {CATEGORIES.map((cat) => (
-              <TouchableOpacity
-                key={cat.name}
-                activeOpacity={0.75}
-                onPress={() => handleCategoryPress(cat.filter)}
-                style={{ width: '48%' }}
-              >
-                <PanelCard style={s.catCard}>
-                  <View style={[s.catIcon, { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
-                    <Ionicons name={cat.icon as any} size={20} color={colors.accent} />
-                  </View>
-                  <Text style={[s.catName, { color: colors.textSecondary }]}>{cat.name.toUpperCase()}</Text>
-                  <Text style={[s.catCount, { color: colors.textMuted }]}>{categoryCounts[cat.filter] ?? 0} items</Text>
-                </PanelCard>
-              </TouchableOpacity>
-            ))}
-
-            {/* + New category card */}
-            <TouchableOpacity
-              activeOpacity={0.75}
-              onPress={() => router.push('/(tabs)/inventory')}
-              style={{ width: '48%' }}
-            >
-              <View style={[s.newCatCard, { borderColor: colors.borderDefault }]}>
-                <Ionicons name="add" size={24} color={colors.textMuted} />
-                <Text style={[s.catName, { color: colors.textMuted }]}>NEW CATEGORY</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+          {loadingCats ? (
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <ActivityIndicator size="small" color={colors.accent} />
+            </View>
+          ) : (
+            <View style={s.grid}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  activeOpacity={0.75}
+                  style={s.cardWrap}
+                  onPress={() => router.push({ pathname: '/category/[id]' as any, params: { id: cat.id } })}
+                >
+                  <PanelCard style={s.catCard}>
+                    <View style={[s.catIcon, { backgroundColor: cat.colour + '15', borderColor: cat.colour + '40' }]}>
+                      <Ionicons name={cat.icon as any} size={24} color={cat.colour} />
+                    </View>
+                    <Text style={[s.catName, { color: colors.textSecondary }]}>{cat.name.toUpperCase()}</Text>
+                    <Text style={[s.catCount, { color: colors.textMuted }]}>{getCatCount(cat.name)} items</Text>
+                  </PanelCard>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </ScrollView>
       ) : (
         <>
-          {results.length > 0 && (
+          {results.length > 0 ? (
             <>
               <EngravingLabel label={`${results.length} results for "${query}"`} />
               <FlatList
@@ -149,9 +144,7 @@ export default function SearchScreen() {
                 contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
               />
             </>
-          )}
-
-          {results.length === 0 && (
+          ) : (
             <EmptyState
               icon="search-outline"
               title={`NO RESULTS FOR "${query.toUpperCase()}"`}
@@ -174,18 +167,21 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
   },
+  cardWrap: {
+    width: '48%',
+  },
   catCard: {
-    minHeight: 72,
+    minHeight: 80,
     paddingVertical: 14,
     paddingHorizontal: 12,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 0,
     marginBottom: 0,
   },
   catIcon: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: 4,
     borderWidth: 1,
     alignItems: 'center',
@@ -195,19 +191,11 @@ const s = StyleSheet.create({
   catName: {
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   catCount: {
     fontSize: 14,
     marginTop: 2,
-  },
-  newCatCard: {
-    minHeight: 72,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderRadius: 4,
+    textAlign: 'center',
   },
 });

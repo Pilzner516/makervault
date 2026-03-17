@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ScreenLayout, ScreenHeader, SearchBar, EngravingLabel,
-  PanelCard, FilterPillRow, FilterPill,
+  PanelCard,
 } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
 import { useSupplierStore, Supplier } from '@/lib/zustand/supplierStore';
@@ -90,16 +90,25 @@ export default function AllSuppliersScreen() {
 
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search suppliers…" />
 
-      <FilterPillRow>
-        {COUNTRIES.map((c) => (
-          <FilterPill
-            key={c.code}
-            label={c.label}
-            active={countryFilter === c.code}
-            onPress={() => setCountryFilter(c.code)}
-          />
-        ))}
-      </FilterPillRow>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8, gap: 6 }}>
+        {COUNTRIES.map((c) => {
+          const active = countryFilter === c.code;
+          return (
+            <TouchableOpacity key={c.code} activeOpacity={0.75}
+              style={{
+                paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4, borderWidth: 1,
+                backgroundColor: active ? colors.accentBg : colors.bgCard,
+                borderColor: active ? colors.accentBorder : colors.borderDefault,
+              }}
+              onPress={() => setCountryFilter(c.code)}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: active ? colors.accent : colors.textMuted }}>
+                {c.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         {Object.entries(grouped).map(([cat, sups]) => (

@@ -92,6 +92,8 @@ export default function WishlistScreen() {
       <ScreenHeader
         title="Wishlist"
         subtitle={items.length > 0 ? `${items.length} items` : undefined}
+        backLabel="Back"
+        onBack={() => router.back()}
         rightElement={
           items.length > 0 ? (
             <TouchableOpacity onPress={handleExport} activeOpacity={0.7}>
