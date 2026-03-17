@@ -264,49 +264,33 @@ export default function AutoScanScreen() {
           ))}
         </View>
 
-        {/* Viewfinder — ALWAYS CENTERED via flex:1 wrapper */}
-        <View style={s.centerArea}>
-          {/* Fixed-size viewfinder container — NEVER changes size */}
-          <View style={s.viewfinderContainer}>
-            <TouchableOpacity activeOpacity={1} onPress={triggerMode === 'stillness' ? handleViewfinderTap : triggerMode === 'manual' ? doCapture : undefined}>
-              <View style={[s.viewfinder, { borderColor: viewfinderColor }]}>
-                {/* Corner markers */}
-                <View style={[s.corner, { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
-                <View style={[s.corner, { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
-                <View style={[s.corner, { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
-                <View style={[s.corner, { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
+        {/* Spacer — pushes bottom content down */}
+        <View style={{ flex: 1 }} />
 
-                {/* Trace animation — 4 full-length edge segments that fade in sequentially */}
-                {showTrace && (
-                  <>
-                    <Animated.View style={[s.traceTop, { opacity: traceTopOp, backgroundColor: colors.accent }]} />
-                    <Animated.View style={[s.traceRight, { opacity: traceRightOp, backgroundColor: colors.accent }]} />
-                    <Animated.View style={[s.traceBottom, { opacity: traceBottomOp, backgroundColor: colors.accent }]} />
-                    <Animated.View style={[s.traceLeft, { opacity: traceLeftOp, backgroundColor: colors.accent }]} />
-                  </>
-                )}
+        {/* Viewfinder — ABSOLUTELY POSITIONED at screen center, independent of all flex layout */}
+        <View style={s.viewfinderAbsolute} pointerEvents="box-none">
+          <TouchableOpacity activeOpacity={1} onPress={triggerMode === 'stillness' ? handleViewfinderTap : triggerMode === 'manual' ? doCapture : undefined}>
+            <View style={[s.viewfinder, { borderColor: viewfinderColor }]}>
+              <View style={[s.corner, { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
+              <View style={[s.corner, { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
+              <View style={[s.corner, { bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
+              <View style={[s.corner, { bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
 
-                {/* Flash overlay */}
-                <Animated.View style={[s.flashOverlay, { opacity: flashAnim, backgroundColor: colors.accent }]} />
-              </View>
-            </TouchableOpacity>
-          </View>
+              {showTrace && (
+                <>
+                  <Animated.View style={[s.traceTop, { opacity: traceTopOp, backgroundColor: colors.accent }]} />
+                  <Animated.View style={[s.traceRight, { opacity: traceRightOp, backgroundColor: colors.accent }]} />
+                  <Animated.View style={[s.traceBottom, { opacity: traceBottomOp, backgroundColor: colors.accent }]} />
+                  <Animated.View style={[s.traceLeft, { opacity: traceLeftOp, backgroundColor: colors.accent }]} />
+                </>
+              )}
 
-          {/* ALL overlays absolutely positioned — no layout shift */}
-          {showNextItem && (
-            <Animated.View style={[s.nextItemAbsolute, { opacity: nextItemAnim }]} pointerEvents="none">
-              <View style={[s.nextItemBox, { backgroundColor: 'rgba(0,0,0,0.85)', borderColor: colors.accent }]}>
-                <Ionicons name="arrow-down" size={24} color={colors.accent} />
-                <Text style={[s.nextItemText, { color: colors.accent }]}>NEXT ITEM</Text>
-                <Text style={[s.nextItemSub, { color: '#fff' }]}>
-                  {triggerMode === 'stillness' ? 'Place next item — auto-captures' : 'Place next item in frame'}
-                </Text>
-              </View>
-            </Animated.View>
-          )}
+              <Animated.View style={[s.flashOverlay, { opacity: flashAnim, backgroundColor: colors.accent }]} />
+            </View>
+          </TouchableOpacity>
 
-          {/* Phase label — absolutely positioned */}
-          <View style={[s.phaseBadge, s.phaseBadgePosition, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+          {/* Phase label — below viewfinder but still absolute to screen */}
+          <View style={[s.phaseBadge, { backgroundColor: 'rgba(0,0,0,0.7)', marginTop: 12 }]}>
             <Text style={[s.phaseText, { color: viewfinderColor }]}>
               {triggerMode === 'stillness'
                 ? detectPhase === 'waiting' ? 'TAP VIEWFINDER WHEN READY'
@@ -320,12 +304,25 @@ export default function AutoScanScreen() {
           </View>
 
           {processingCount > 0 && (
-            <View style={[s.processingBadge, s.processingBadgePosition, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+            <View style={[s.processingBadge, { backgroundColor: 'rgba(0,0,0,0.7)', marginTop: 4 }]}>
               <ActivityIndicator size="small" color={colors.accent} />
               <Text style={{ fontSize: 14, fontWeight: '600', color: colors.accent }}>PROCESSING {processingCount}...</Text>
             </View>
           )}
         </View>
+
+        {/* NEXT ITEM — absolute overlay on entire screen, no layout impact */}
+        {showNextItem && (
+          <Animated.View style={[s.fullScreenOverlay, { opacity: nextItemAnim }]} pointerEvents="none">
+            <View style={[s.nextItemBox, { backgroundColor: 'rgba(0,0,0,0.85)', borderColor: colors.accent }]}>
+              <Ionicons name="arrow-down" size={24} color={colors.accent} />
+              <Text style={[s.nextItemText, { color: colors.accent }]}>NEXT ITEM</Text>
+              <Text style={[s.nextItemSub, { color: '#fff' }]}>
+                {triggerMode === 'stillness' ? 'Place next item — auto-captures' : 'Place next item in frame'}
+              </Text>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Thumbnail strip */}
         {captures.length > 0 && (
@@ -372,27 +369,31 @@ const s = StyleSheet.create({
   opaqueBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' },
   countBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 4, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   triggerRow: { flexDirection: 'row', marginHorizontal: 12, gap: 6 },
-  // centerArea uses flex:1 to fill middle space, keeping viewfinder perfectly centered
-  centerArea: { flex: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  viewfinderContainer: { width: VIEWFINDER_SIZE, height: VIEWFINDER_SIZE },
+  // Viewfinder — absolutely positioned at exact screen center, immune to flex changes
+  viewfinderAbsolute: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -(VIEWFINDER_SIZE / 2) - 20, // offset up slightly for phase label below
+    marginLeft: -(VIEWFINDER_SIZE / 2),
+    alignItems: 'center',
+    zIndex: 10,
+  },
   viewfinder: { width: VIEWFINDER_SIZE, height: VIEWFINDER_SIZE, borderWidth: 2, borderRadius: 4, position: 'relative', overflow: 'hidden' },
   corner: { position: 'absolute', width: 28, height: 28, borderStyle: 'solid', borderWidth: 0 },
-  // Trace — 4 full-length edge lines, each fades in via opacity
   traceTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, zIndex: 5 },
   traceRight: { position: 'absolute', top: 0, right: 0, bottom: 0, width: 3, zIndex: 5 },
   traceBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, zIndex: 5 },
   traceLeft: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, zIndex: 5 },
   flashOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 4 },
-  // "NEXT ITEM" absolutely positioned — overlays center without shifting layout
-  nextItemAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+  // "NEXT ITEM" — covers entire screen, always centered
+  fullScreenOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 30 },
   nextItemBox: { alignItems: 'center', padding: 16, borderRadius: 4, borderWidth: 2, gap: 6 },
   nextItemText: { fontSize: 24, fontWeight: '800', letterSpacing: 0.5 },
   nextItemSub: { fontSize: 14, textAlign: 'center' },
   phaseBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 4 },
-  phaseBadgePosition: { position: 'absolute', bottom: 24, alignSelf: 'center' },
   phaseText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.05, textAlign: 'center' },
   processingBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 4 },
-  processingBadgePosition: { position: 'absolute', bottom: 4, alignSelf: 'center' },
   thumbStrip: { paddingHorizontal: 12, gap: 6, paddingVertical: 4 },
   thumbWrap: { position: 'relative' },
   thumb: { width: 52, height: 52, borderRadius: 4 },
