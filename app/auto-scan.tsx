@@ -101,70 +101,85 @@ export default function AutoScanScreen() {
   const traceBottomOp = useRef(new Animated.Value(0)).current;
   const traceLeftOp = useRef(new Animated.Value(0)).current;
 
-  // ─── MOTION DETECTION via periodic snapshots ───
-  // After each capture, we take quick low-res snapshots every 400ms.
-  // Compare file sizes as a proxy for frame difference (different scene = different size).
-  // Motion detected → wait for stillness → trace → capture.
-  const referenceSize = useRef(0);
-  const stillnessStart = useRef(0);
-  const motionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ─── MOTION DETECTION via accelerometer ───
+  // Uses device accelerometer instead of camera snapshots.
+  // Zero disk writes, minimal battery, no camera frame processing.
+  // Detects: motion spike (item swap) → stillness (item settled) → capture.
   const autoRunning = useRef(false);
+  const hadMotion = useRef(false);
+  const stillnessStart = useRef(0);
+  const accelSub = useRef<{ remove: () => void } | null>(null);
+  const motionCheckTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startMotionDetection = useCallback(() => {
-    if (motionCheckRef.current) clearInterval(motionCheckRef.current);
     autoRunning.current = true;
-    setDetectPhase('waiting');
-    referenceSize.current = 0;
+    hadMotion.current = false;
     stillnessStart.current = 0;
+    setDetectPhase('waiting');
 
-    motionCheckRef.current = setInterval(async () => {
-      if (!autoRunning.current || isCapturingRef.current || !cameraRef.current) return;
+    let lastMag = 0;
+    let isMoving = false;
 
-      try {
-        // Take a tiny snapshot to detect changes
-        const snap = await cameraRef.current.takePictureAsync({ quality: 0.1 });
-        if (!snap) return;
+    // Subscribe to accelerometer at ~10Hz (100ms interval) — very low power
+    try {
+      const { Accelerometer } = require('expo-sensors') as typeof import('expo-sensors');
+      Accelerometer.setUpdateInterval(100);
 
-        // Use URI length as a rough proxy for image complexity/content
-        const currentSize = snap.uri.length + (snap.width ?? 0) * (snap.height ?? 0);
+      accelSub.current = Accelerometer.addListener(({ x, y, z }) => {
+        if (!autoRunning.current || isCapturingRef.current) return;
 
-        if (referenceSize.current === 0) {
-          // First frame — set as reference
-          referenceSize.current = currentSize;
-          return;
-        }
+        // Calculate magnitude of acceleration (gravity is ~1.0)
+        const mag = Math.sqrt(x * x + y * y + z * z);
+        const delta = Math.abs(mag - lastMag);
+        lastMag = mag;
 
-        const diff = Math.abs(currentSize - referenceSize.current) / referenceSize.current;
-
-        if (diff > 0.05) {
-          // Motion detected — scene changed significantly
-          setDetectPhase('motion');
-          referenceSize.current = currentSize;
+        // Threshold: delta > 0.15 = motion (hand moving, item being placed)
+        if (delta > 0.15) {
+          isMoving = true;
+          hadMotion.current = true;
           stillnessStart.current = 0;
+          setDetectPhase('motion');
         } else {
-          // Scene is stable
-          if (stillnessStart.current === 0) {
-            stillnessStart.current = Date.now();
-            setDetectPhase('settling');
-          } else if (Date.now() - stillnessStart.current > STILLNESS_THRESHOLD) {
-            // Stable long enough — capture!
-            autoRunning.current = false;
-            if (motionCheckRef.current) clearInterval(motionCheckRef.current);
-            setDetectPhase('ready');
-            playTraceAndCapture();
-          }
+          isMoving = false;
         }
-      } catch {
-        // Snapshot failed — continue
+      });
+    } catch {
+      // Accelerometer not available — fall back to timed capture
+      setDetectPhase('settling');
+    }
+
+    // Check stillness periodically — separate from accel events
+    motionCheckTimer.current = setInterval(() => {
+      if (!autoRunning.current || isCapturingRef.current) return;
+
+      if (!hadMotion.current) {
+        // Haven't seen motion yet — still waiting for first item
+        return;
       }
-    }, MOTION_CHECK_INTERVAL);
+
+      // We've had motion and now checking if still
+      if (stillnessStart.current === 0) {
+        // Just stopped moving
+        stillnessStart.current = Date.now();
+        setDetectPhase('settling');
+      } else if (Date.now() - stillnessStart.current > STILLNESS_THRESHOLD) {
+        // Still long enough — capture!
+        stopMotionDetection();
+        setDetectPhase('ready');
+        playTraceAndCapture();
+      }
+    }, 200);
   }, []);
 
   const stopMotionDetection = () => {
     autoRunning.current = false;
-    if (motionCheckRef.current) {
-      clearInterval(motionCheckRef.current);
-      motionCheckRef.current = null;
+    if (accelSub.current) {
+      accelSub.current.remove();
+      accelSub.current = null;
+    }
+    if (motionCheckTimer.current) {
+      clearInterval(motionCheckTimer.current);
+      motionCheckTimer.current = null;
     }
   };
 
