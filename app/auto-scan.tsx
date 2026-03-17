@@ -35,6 +35,7 @@ export default function AutoScanScreen() {
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [flash, setFlash] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const isCapturingRef = useRef(false);
   const flashAnim = useRef(new Animated.Value(0)).current;
   const nextItemAnim = useRef(new Animated.Value(0)).current;
   const [showTrace, setShowTrace] = useState(false);
@@ -101,7 +102,7 @@ export default function AutoScanScreen() {
   const traceLeftOp = useRef(new Animated.Value(0)).current;
 
   const playTraceAndCapture = useCallback(() => {
-    if (isCapturing || !cameraRef.current) return;
+    if (isCapturingRef.current || !cameraRef.current) return;
     const now = Date.now();
     if (now - lastCaptureTime.current < CAPTURE_COOLDOWN) return;
 
@@ -120,13 +121,14 @@ export default function AutoScanScreen() {
       setShowTrace(false);
       doCapture();
     });
-  }, [isCapturing]);
+  }, []);
 
   const doCapture = useCallback(async () => {
-    if (isCapturing || !cameraRef.current) return;
+    if (isCapturingRef.current || !cameraRef.current) return;
     const now = Date.now();
     if (now - lastCaptureTime.current < CAPTURE_COOLDOWN) return;
 
+    isCapturingRef.current = true;
     setIsCapturing(true);
     lastCaptureTime.current = now;
     Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -156,9 +158,10 @@ export default function AutoScanScreen() {
     } catch {
       // Camera capture failed
     } finally {
+      isCapturingRef.current = false;
       setIsCapturing(false);
     }
-  }, [isCapturing, addCapture, triggerMode]);
+  }, [addCapture, triggerMode]);
 
   const handleViewfinderTap = () => {
     if (triggerMode === 'stillness' && !isCapturing) {
