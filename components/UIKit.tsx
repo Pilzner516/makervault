@@ -819,8 +819,8 @@ const styles = StyleSheet.create({
   crosshairH: { position:'absolute', top:6, left:0, right:0, height:0.5, borderRadius:1 },
   crosshairV: { position:'absolute', left:6, top:0, bottom:0, width:0.5, borderRadius:1 },
   // Pills
-  pillRow: { paddingHorizontal:12, paddingTop:2, paddingBottom:4, gap:5, flexDirection:'row' },
-  pill: { borderWidth:1, borderRadius:3, paddingHorizontal:8, paddingVertical:3 },
+  pillRow: { paddingHorizontal:12, paddingTop:6, paddingBottom:8, gap:6, flexDirection:'row' },
+  pill: { borderWidth:1, borderRadius:4, paddingHorizontal:12, paddingVertical:8, minHeight:36 },
   pillText: { fontSize:14, fontWeight:'700', letterSpacing:0.04 },
   // Mode btn — 48px tap target, 15px text
   modeBtn: { flex:1, borderWidth:1, borderRadius:4, paddingVertical:8, paddingHorizontal:4, alignItems:'center', justifyContent:'center', minHeight:36 },
