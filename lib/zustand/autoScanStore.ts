@@ -67,6 +67,17 @@ const INTERVAL_KEY = 'autoscan_timer_interval';
 const UNCONFIRMED_KEY = 'autoscan_unconfirmed';
 let captureCounter = 0;
 
+// Persist all unconfirmed captures to AsyncStorage after every change
+// so nothing is lost if the app is killed or backgrounded
+function persistNow(captures: AutoScanCapture[]) {
+  const toSave = captures.filter((c) => !c.confirmed && !c.discarded && (c.status === 'done' || c.status === 'processing'));
+  if (toSave.length > 0) {
+    AsyncStorage.setItem(UNCONFIRMED_KEY, JSON.stringify(toSave)).catch(() => {});
+  } else {
+    AsyncStorage.removeItem(UNCONFIRMED_KEY).catch(() => {});
+  }
+}
+
 export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
   isActive: false,
   captures: [],
@@ -130,8 +141,8 @@ export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
       // Identify with Gemini
       const result = await identifyPart(base64, mimeType);
 
-      set((s) => ({
-        captures: s.captures.map((c) =>
+      set((s) => {
+        const updated = s.captures.map((c) =>
           c.id === id
             ? {
                 ...c,
@@ -149,16 +160,20 @@ export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
                 },
               }
             : c
-        ),
-      }));
+        );
+        persistNow(updated);
+        return { captures: updated };
+      });
     } catch (e) {
-      set((s) => ({
-        captures: s.captures.map((c) =>
+      set((s) => {
+        const updated = s.captures.map((c) =>
           c.id === id
             ? { ...c, status: 'failed' as CaptureStatus, error: e instanceof Error ? e.message : 'Unknown error' }
             : c
-        ),
-      }));
+        );
+        persistNow(updated);
+        return { captures: updated };
+      });
     }
   },
 
@@ -169,27 +184,33 @@ export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
   },
 
   confirmCapture: (id) => {
-    set((s) => ({
-      captures: s.captures.map((c) => c.id === id ? { ...c, confirmed: true, discarded: false } : c),
-    }));
+    set((s) => {
+      const updated = s.captures.map((c) => c.id === id ? { ...c, confirmed: true, discarded: false } : c);
+      persistNow(updated);
+      return { captures: updated };
+    });
   },
 
   discardCapture: (id) => {
-    set((s) => ({
-      captures: s.captures.map((c) => c.id === id ? { ...c, discarded: true, confirmed: false } : c),
-    }));
+    set((s) => {
+      const updated = s.captures.map((c) => c.id === id ? { ...c, discarded: true, confirmed: false } : c);
+      persistNow(updated);
+      return { captures: updated };
+    });
   },
 
   confirmAllAboveThreshold: (threshold) => {
-    set((s) => ({
-      captures: s.captures.map((c) => {
+    set((s) => {
+      const updated = s.captures.map((c) => {
         if (c.discarded || c.confirmed) return c;
         if (c.status === 'done' && c.result && c.result.confidence >= threshold) {
           return { ...c, confirmed: true };
         }
         return c;
-      }),
-    }));
+      });
+      persistNow(updated);
+      return { captures: updated };
+    });
   },
 
   clearSession: () => {

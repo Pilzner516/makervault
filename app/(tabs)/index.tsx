@@ -31,7 +31,7 @@ export default function HomeScreen() {
   const lowStockCount = lowStockParts.length;
   const [totalProjects, setTotalProjects] = useState(0);
   const { loadUnconfirmed, hasUnconfirmed, captures: autoCaptures } = useAutoScanStore();
-  const unconfirmedCount = autoCaptures.filter((c) => !c.confirmed && !c.discarded && c.status === 'done').length;
+  const unconfirmedCount = autoCaptures.filter((c) => !c.confirmed && !c.discarded && (c.status === 'done' || c.status === 'processing')).length;
 
   useEffect(() => {
     supabase
