@@ -1,6 +1,6 @@
 import { View, Modal, Alert, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -34,13 +34,19 @@ function getAbbr(text: string): string {
 
 export default function InventoryScreen() {
   const router = useRouter();
+  const { filterCategory } = useLocalSearchParams<{ filterCategory?: string }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { parts, isLoading, fetchParts, addPart, deletePart } = useInventoryStore();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(filterCategory ?? '');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sortKey, setSortKey] = useState<SortKey>('updated_at');
   const [showAddSheet, setShowAddSheet] = useState(false);
+
+  // Apply filter from category drill-down
+  useEffect(() => {
+    if (filterCategory) setSearch(filterCategory);
+  }, [filterCategory]);
 
   useEffect(() => {
     if (isSupabaseConfigured()) {

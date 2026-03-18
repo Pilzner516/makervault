@@ -64,25 +64,38 @@ export default function CategoryScreen() {
     })();
   }, [id]);
 
-  // Count parts matching each subcategory name
+  // Same keyword mapping as search screen for accurate counting
+  const CAT_KEYWORDS: Record<string, string[]> = {
+    'electronics': ['resistor', 'capacitor', 'inductor', 'led', 'diode', 'transistor', 'ic', 'microcontroller', 'sensor', 'connector', 'switch', 'relay', 'crystal', 'fuse', 'display', 'module', 'cable', 'wire', 'board', 'arduino', 'raspberry', 'esp', 'power', 'voltage', 'charger', 'adapter', 'usb', 'hdmi', 'electronic'],
+    'fasteners': ['bolt', 'screw', 'nut', 'washer', 'rivet', 'standoff', 'anchor', 'clip', 'pin', 'insert', 'fastener'],
+    'tools': ['tool', 'hammer', 'wrench', 'screwdriver', 'plier', 'solder', 'multimeter', 'clamp', 'saw', 'drill', 'cutter', 'measure'],
+    '3d printing': ['filament', 'pla', 'petg', 'abs', 'resin', 'nozzle', 'hotend', 'printer', '3d print', 'bed', 'stepper'],
+    'materials': ['alumin', 'steel', 'wood', 'timber', 'acrylic', 'foam', 'adhesive', 'tape', 'sheet', 'stock', 'material', 'copper', 'pcb'],
+    'mechanical': ['bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'motor', 'coupling', 'actuator', 'servo', 'mechanical'],
+    'safety & ppe': ['safety', 'glove', 'goggle', 'mask', 'respirator', 'ear', 'protection', 'ppe'],
+  };
+
+  const matchesCategory = (p: typeof parts[0], catName: string): boolean => {
+    const keywords = CAT_KEYWORDS[catName.toLowerCase()] ?? [catName.toLowerCase()];
+    const pCat = (p.category ?? '').toLowerCase();
+    const pName = p.name.toLowerCase();
+    const pSub = (p.subcategory ?? '').toLowerCase();
+    return keywords.some((kw) => pCat.includes(kw) || pName.includes(kw) || pSub.includes(kw)) || pCat.includes(catName.toLowerCase());
+  };
+
+  const categoryParts = category ? parts.filter((p) => matchesCategory(p, category.name)) : [];
+  const categoryPartCount = categoryParts.length;
+
+  // Count parts matching each subcategory
   const getSubcategoryCount = (subName: string) => {
     const lower = subName.toLowerCase();
-    return parts.filter(
+    return categoryParts.filter(
       (p) =>
-        p.subcategory?.toLowerCase() === lower ||
-        p.category?.toLowerCase().includes(lower) ||
+        (p.subcategory ?? '').toLowerCase().includes(lower) ||
+        (p.category ?? '').toLowerCase().includes(lower) ||
         p.name.toLowerCase().includes(lower)
     ).length;
   };
-
-  // Count all parts in this category
-  const categoryPartCount = category
-    ? parts.filter(
-        (p) =>
-          p.category?.toLowerCase() === category.name.toLowerCase() ||
-          p.category?.toLowerCase().includes(category.name.toLowerCase())
-      ).length
-    : 0;
 
   if (isLoading) {
     return (
@@ -167,13 +180,9 @@ export default function CategoryScreen() {
         {/* Parts in this category */}
         {categoryPartCount > 0 && (
           <>
-            <EngravingLabel label={`All ${category.name} parts`} />
+            <EngravingLabel label={`All ${category.name} parts · ${categoryPartCount}`} />
             <PanelCard>
-              {parts
-                .filter((p) =>
-                  p.category?.toLowerCase() === category.name.toLowerCase() ||
-                  p.category?.toLowerCase().includes(category.name.toLowerCase())
-                )
+              {categoryParts
                 .slice(0, 20)
                 .map((part, i, arr) => (
                   <ItemRow
