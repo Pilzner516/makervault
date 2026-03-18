@@ -131,86 +131,15 @@ export default function AutoScanScreen() {
   const traceBottomOp = useRef(new Animated.Value(0)).current;
   const traceLeftOp = useRef(new Animated.Value(0)).current;
 
-  // ─── MOTION DETECTION via accelerometer ───
-  // Uses device accelerometer instead of camera snapshots.
-  // Zero disk writes, minimal battery, no camera frame processing.
-  // Detects: motion spike (item swap) → stillness (item settled) → capture.
-  const autoRunning = useRef(false);
-  const hadMotion = useRef(false);
-  const stillnessStart = useRef(0);
-  const accelSub = useRef<{ remove: () => void } | null>(null);
-  const motionCheckTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
+  // ─── HANDHELD MODE ───
+  // Uses the same timed cycle as stand mode but with a shorter interval (2.5s)
+  // Accelerometer will be added when dev build includes expo-sensors
   const startMotionDetection = useCallback(() => {
-    autoRunning.current = true;
-    hadMotion.current = false;
-    stillnessStart.current = 0;
-    setDetectPhase('waiting');
-
-    let lastMag = 0;
-    let isMoving = false;
-
-    // Try accelerometer — if native module not available, fall back to scene detection
-    try {
-      const AccelModule = require('expo-sensors/build/Accelerometer');
-      const Accelerometer = AccelModule.default ?? AccelModule.Accelerometer ?? AccelModule;
-      if (Accelerometer && typeof Accelerometer.setUpdateInterval === 'function') {
-        Accelerometer.setUpdateInterval(100);
-        accelSub.current = Accelerometer.addListener(({ x, y, z }: { x: number; y: number; z: number }) => {
-          if (!autoRunning.current || isCapturingRef.current) return;
-          const mag = Math.sqrt(x * x + y * y + z * z);
-          const delta = Math.abs(mag - lastMag);
-          lastMag = mag;
-          if (delta > MOTION_THRESHOLD) {
-            hadMotion.current = true;
-            stillnessStart.current = 0;
-            setDetectPhase('motion');
-          }
-        });
-      } else {
-        throw new Error('Accelerometer not available');
-      }
-    } catch {
-      // Accelerometer native module not in this build — use scene detection instead
-      console.log('Accelerometer unavailable, handheld mode will use scene detection');
-      // Fall back to scene-based detection (same as On Stand mode)
-      startStandDetection();
-      return;
-    }
-
-    // Check stillness periodically — separate from accel events
-    motionCheckTimer.current = setInterval(() => {
-      if (!autoRunning.current || isCapturingRef.current) return;
-
-      if (!hadMotion.current) {
-        // Haven't seen motion yet — still waiting for first item
-        return;
-      }
-
-      // We've had motion and now checking if still
-      if (stillnessStart.current === 0) {
-        // Just stopped moving
-        stillnessStart.current = Date.now();
-        setDetectPhase('settling');
-      } else if (Date.now() - stillnessStart.current > STILLNESS_THRESHOLD) {
-        // Still long enough — capture!
-        stopMotionDetection();
-        setDetectPhase('ready');
-        playTraceAndCapture();
-      }
-    }, 200);
-  }, []);
+    startStandDetection();
+  }, [startStandDetection]);
 
   const stopMotionDetection = () => {
-    autoRunning.current = false;
-    if (accelSub.current) {
-      accelSub.current.remove();
-      accelSub.current = null;
-    }
-    if (motionCheckTimer.current) {
-      clearInterval(motionCheckTimer.current);
-      motionCheckTimer.current = null;
-    }
+    stopStandDetection();
   };
 
   const playTraceAndCapture = useCallback(() => {
