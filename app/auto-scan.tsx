@@ -181,32 +181,32 @@ export default function AutoScanScreen() {
     let lastMag = 0;
     let isMoving = false;
 
-    // Subscribe to accelerometer at ~10Hz (100ms interval) — very low power
+    // Try accelerometer — if native module not available, fall back to scene detection
     try {
-      const { Accelerometer } = require('expo-sensors') as typeof import('expo-sensors');
-      Accelerometer.setUpdateInterval(100);
-
-      accelSub.current = Accelerometer.addListener(({ x, y, z }) => {
-        if (!autoRunning.current || isCapturingRef.current) return;
-
-        // Calculate magnitude of acceleration (gravity is ~1.0)
-        const mag = Math.sqrt(x * x + y * y + z * z);
-        const delta = Math.abs(mag - lastMag);
-        lastMag = mag;
-
-        // Threshold: delta > 0.15 = motion (hand moving, item being placed)
-        if (delta > 0.15) {
-          isMoving = true;
-          hadMotion.current = true;
-          stillnessStart.current = 0;
-          setDetectPhase('motion');
-        } else {
-          isMoving = false;
-        }
-      });
+      const AccelModule = require('expo-sensors/build/Accelerometer');
+      const Accelerometer = AccelModule.default ?? AccelModule.Accelerometer ?? AccelModule;
+      if (Accelerometer && typeof Accelerometer.setUpdateInterval === 'function') {
+        Accelerometer.setUpdateInterval(100);
+        accelSub.current = Accelerometer.addListener(({ x, y, z }: { x: number; y: number; z: number }) => {
+          if (!autoRunning.current || isCapturingRef.current) return;
+          const mag = Math.sqrt(x * x + y * y + z * z);
+          const delta = Math.abs(mag - lastMag);
+          lastMag = mag;
+          if (delta > 0.15) {
+            hadMotion.current = true;
+            stillnessStart.current = 0;
+            setDetectPhase('motion');
+          }
+        });
+      } else {
+        throw new Error('Accelerometer not available');
+      }
     } catch {
-      // Accelerometer not available — fall back to timed capture
-      setDetectPhase('settling');
+      // Accelerometer native module not in this build — use scene detection instead
+      console.log('Accelerometer unavailable, handheld mode will use scene detection');
+      // Fall back to scene-based detection (same as On Stand mode)
+      startStandDetection();
+      return;
     }
 
     // Check stillness periodically — separate from accel events
