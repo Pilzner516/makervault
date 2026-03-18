@@ -18,12 +18,12 @@ const Haptics = Platform.OS !== 'web'
 
 const TRIGGER_MODES: { key: TriggerMode; label: string }[] = [
   { key: 'manual', label: 'Manual' },
-  { key: 'stillness', label: 'Auto' },
-  { key: 'timer', label: 'Timer' },
+  { key: 'stillness', label: 'Handheld' },
+  { key: 'timer', label: 'On Stand' },
 ];
 
-const STILLNESS_THRESHOLD = 1200; // ms of no motion before capture
-const MOTION_CHECK_INTERVAL = 400; // ms between motion checks
+const STILLNESS_THRESHOLD = 1200;
+const STAND_CAPTURE_INTERVAL = 4000; // 4 seconds between captures in stand mode
 const VIEWFINDER_SIZE = 220;
 
 export default function AutoScanScreen() {
@@ -62,16 +62,17 @@ export default function AutoScanScreen() {
     };
   }, []);
 
-  // Timer mode
+  // Stand mode — auto-captures at fixed interval
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (triggerMode === 'timer') {
+      setDetectPhase('settling');
       timerRef.current = setInterval(() => {
         playTraceAndCapture();
-      }, timerInterval * 1000);
+      }, STAND_CAPTURE_INTERVAL);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [triggerMode, timerInterval]);
+  }, [triggerMode]);
 
   useEffect(() => {
     if (triggerMode === 'stillness' && captures.length === 0) {
@@ -365,9 +366,10 @@ export default function AutoScanScreen() {
                 : detectPhase === 'motion' ? 'MOTION DETECTED'
                 : detectPhase === 'settling' ? 'HOLD STILL...'
                 : detectPhase === 'ready' ? 'CAPTURING...'
-                : 'AUTO-SCANNING'
+                : 'HANDHELD AUTO-SCAN'
               : triggerMode === 'timer'
-                ? `AUTO · EVERY ${timerInterval}S`
+                ? detectPhase === 'ready' ? 'CAPTURING...'
+                : 'ON STAND · PLACE ITEM & WAIT'
                 : 'TAP VIEWFINDER TO CAPTURE'}
             </Text>
           </View>
