@@ -22,8 +22,8 @@ const TRIGGER_MODES: { key: TriggerMode; label: string }[] = [
   { key: 'timer', label: 'On Stand' },
 ];
 
-const STILLNESS_THRESHOLD = 1200;
-const STAND_CAPTURE_INTERVAL = 4000; // 4 seconds between captures in stand mode
+const STILLNESS_THRESHOLD = 800; // ms — shorter so natural hand tremor doesn't block
+const MOTION_THRESHOLD = 0.4;   // accel delta — higher so hand tremor is ignored
 const VIEWFINDER_SIZE = 220;
 
 export default function AutoScanScreen() {
@@ -63,65 +63,34 @@ export default function AutoScanScreen() {
     };
   }, []);
 
-  // Stand mode — scene change detection via tiny snapshot brightness comparison
-  const standRef = useRef<{ running: boolean; lastSize: number; stillSince: number; interval: ReturnType<typeof setInterval> | null }>({
-    running: false, lastSize: 0, stillSince: 0, interval: null,
-  });
+  // Stand/fallback mode — timed auto-capture cycle
+  // Captures every 3.5 seconds. User swaps items during the gap.
+  // Simple, reliable, no false positives from camera noise.
+  const standTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const standRunning = useRef(false);
 
   const startStandDetection = useCallback(() => {
-    const state = standRef.current;
-    state.running = true;
-    state.lastSize = 0;
-    state.stillSince = 0;
-    setDetectPhase('waiting');
+    standRunning.current = true;
+    setDetectPhase('settling');
 
-    state.interval = setInterval(async () => {
-      if (!state.running || isCapturingRef.current || !cameraRef.current) return;
-
-      try {
-        // Take the tiniest possible snapshot — just to compare file size
-        const snap = await cameraRef.current.takePictureAsync({ quality: 0.01 });
-        if (!snap) return;
-
-        // File size of even a tiny JPEG changes when the scene changes
-        const size = snap.width * snap.height;
-
-        if (state.lastSize === 0) {
-          state.lastSize = size;
-          return;
-        }
-
-        const diff = Math.abs(size - state.lastSize) / Math.max(state.lastSize, 1);
-        state.lastSize = size;
-
-        if (diff > 0.03) {
-          // Scene changed — item was swapped
-          setDetectPhase('motion');
-          state.stillSince = 0;
-        } else {
-          // Scene stable
-          if (state.stillSince === 0) {
-            state.stillSince = Date.now();
-            setDetectPhase('settling');
-          } else if (Date.now() - state.stillSince > STILLNESS_THRESHOLD) {
-            // Stable long enough — capture
-            state.running = false;
-            if (state.interval) clearInterval(state.interval);
-            setDetectPhase('ready');
-            playTraceAndCapture();
-          }
-        }
-      } catch {
-        // Snapshot failed — skip this cycle
-      }
-    }, 1500); // Check every 1.5s — very light on battery/CPU
+    const cycle = () => {
+      if (!standRunning.current) return;
+      setDetectPhase('settling');
+      standTimerRef.current = setTimeout(() => {
+        if (!standRunning.current) return;
+        setDetectPhase('ready');
+        playTraceAndCapture();
+        // After capture completes, doCapture restarts via startStandDetection
+      }, 3500);
+    };
+    cycle();
   }, []);
 
   const stopStandDetection = () => {
-    standRef.current.running = false;
-    if (standRef.current.interval) {
-      clearInterval(standRef.current.interval);
-      standRef.current.interval = null;
+    standRunning.current = false;
+    if (standTimerRef.current) {
+      clearTimeout(standTimerRef.current);
+      standTimerRef.current = null;
     }
   };
 
@@ -192,7 +161,7 @@ export default function AutoScanScreen() {
           const mag = Math.sqrt(x * x + y * y + z * z);
           const delta = Math.abs(mag - lastMag);
           lastMag = mag;
-          if (delta > 0.15) {
+          if (delta > MOTION_THRESHOLD) {
             hadMotion.current = true;
             stillnessStart.current = 0;
             setDetectPhase('motion');
@@ -431,11 +400,8 @@ export default function AutoScanScreen() {
                 : detectPhase === 'ready' ? 'CAPTURING...'
                 : 'HANDHELD AUTO-SCAN'
               : triggerMode === 'timer'
-                ? detectPhase === 'waiting' ? 'WATCHING FOR SCENE CHANGE...'
-                : detectPhase === 'motion' ? 'CHANGE DETECTED'
-                : detectPhase === 'settling' ? 'HOLD STILL...'
-                : detectPhase === 'ready' ? 'CAPTURING...'
-                : 'ON STAND · PLACE ITEM'
+                ? detectPhase === 'ready' ? 'CAPTURING...'
+                : 'SWAP ITEM NOW · NEXT SCAN IN 3S'
                 : 'TAP VIEWFINDER TO CAPTURE'}
             </Text>
           </View>
