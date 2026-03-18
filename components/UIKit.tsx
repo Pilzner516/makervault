@@ -225,7 +225,7 @@ export function AddButton({ label = '+ Add', onPress }: { label?: string; onPres
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.75}
       style={[styles.addBtn, { backgroundColor: colors.bgScreen, borderColor: colors.borderDefault }]}>
-      <Text style={[styles.addBtnText, { color: colors.accent }]}>{label.toUpperCase()}</Text>
+      <Text numberOfLines={1} style={[styles.addBtnText, { color: colors.accent }]}>{label.toUpperCase()}</Text>
     </TouchableOpacity>
   );
 }
@@ -241,7 +241,7 @@ export function StatTile({ value, label, color, onPress }: StatProps) {
       <PanelBevelTop />
       <InsetTint />
       <Text style={[styles.statVal, { color: color ?? colors.accent }]}>{value}</Text>
-      <Text style={[styles.statLbl, { color: colors.textFaint }]}>{label.toUpperCase()}</Text>
+      <Text numberOfLines={1} style={[styles.statLbl, { color: colors.textFaint }]}>{label.toUpperCase()}</Text>
     </TouchableOpacity>
   );
 }
@@ -341,7 +341,7 @@ export function Badge({ variant, label }: BadgeProps) {
   const s = map[variant];
   return (
     <View style={[styles.badge, { backgroundColor: s.bg, borderColor: s.border }]}>
-      <Text style={[styles.badgeText, { color: s.text }]}>{(label ?? s.def).toUpperCase()}</Text>
+      <Text numberOfLines={1} style={[styles.badgeText, { color: s.text }]}>{(label ?? s.def).toUpperCase()}</Text>
     </View>
   );
 }
@@ -478,7 +478,7 @@ export function FilterPill({ label, active, onPress }: PillProps) {
     <TouchableOpacity onPress={onPress} activeOpacity={0.75}
       style={[styles.pill, { backgroundColor: colors.bgDeep, borderColor: colors.borderDefault },
         active && { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
-      <Text style={[styles.pillText, { color: colors.textMuted }, active && { color: colors.accent }]}>
+      <Text numberOfLines={1} style={[styles.pillText, { color: colors.textMuted }, active && { color: colors.accent }]}>
         {label.toUpperCase()}
       </Text>
     </TouchableOpacity>
@@ -563,7 +563,7 @@ export function PrimaryButton({ label, onPress, icon, disabled }: BtnProps) {
       <PanelBevelTop />
       <InsetTint />
       {icon && <Ionicons name={icon as any} size={14} color={disabled ? colors.textMuted : colors.accent} style={{ marginRight: 5 }} />}
-      <Text style={[styles.primaryBtnText, { color: disabled ? colors.textMuted : colors.accent }]}>
+      <Text numberOfLines={1} style={[styles.primaryBtnText, { color: disabled ? colors.textMuted : colors.accent }]}>
         {label.toUpperCase()}
       </Text>
     </TouchableOpacity>
@@ -575,7 +575,7 @@ export function SecondaryButton({ label, onPress, icon }: BtnProps) {
     <TouchableOpacity onPress={onPress} activeOpacity={0.75}
       style={[styles.secondaryBtn, { backgroundColor: colors.bgDeep, borderColor: colors.borderDefault }]}>
       {icon && <Ionicons name={icon as any} size={12} color={colors.textMuted} style={{ marginRight: 4 }} />}
-      <Text style={[styles.secondaryBtnText, { color: colors.textMuted }]}>{label.toUpperCase()}</Text>
+      <Text numberOfLines={1} style={[styles.secondaryBtnText, { color: colors.textMuted }]}>{label.toUpperCase()}</Text>
     </TouchableOpacity>
   );
 }
@@ -633,11 +633,11 @@ export function ScanResultCard({ name, confidence, suggestedLocation, onConfirm,
           <TouchableOpacity onPress={onConfirm} activeOpacity={0.75}
             style={[styles.confirmBtn, { backgroundColor: colors.accentBg, borderColor: colors.accentBorder }]}>
             <Ionicons name="checkmark" size={11} color={colors.accent} />
-            <Text style={[styles.confirmText, { color: colors.accent }]}>ADD TO VAULT</Text>
+            <Text numberOfLines={1} style={[styles.confirmText, { color: colors.accent }]}>ADD TO VAULT</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onReject} activeOpacity={0.75}
             style={[styles.rejectBtn, { backgroundColor: colors.bgDeep, borderColor: colors.borderDefault }]}>
-            <Text style={[styles.rejectText, { color: colors.textMuted }]}>WRONG ITEM</Text>
+            <Text numberOfLines={1} style={[styles.rejectText, { color: colors.textMuted }]}>WRONG ITEM</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -694,7 +694,7 @@ export function BottomNav({ activeKey, onNavigate }: { activeKey: string; onNavi
             {on && <View style={[styles.navLine, { backgroundColor: colors.accent }]} />}
             <Ionicons name={(on ? item.activeIcon : item.icon) as any}
               size={20} color={on ? colors.accent : colors.textDisabled} />
-            <Text style={[styles.navLabel, { color: on ? colors.accent : colors.textDisabled }]}>
+            <Text numberOfLines={1} style={[styles.navLabel, { color: on ? colors.accent : colors.textDisabled }]}>
               {item.label.toUpperCase()}
             </Text>
           </TouchableOpacity>
