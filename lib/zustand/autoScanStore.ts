@@ -75,7 +75,9 @@ export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
 
   startSession: () => {
     captureCounter = 0;
-    set({ isActive: true, captures: [] });
+    // Keep existing unconfirmed captures — only clear confirmed/discarded ones
+    const existing = get().captures.filter((c) => !c.confirmed && !c.discarded);
+    set({ isActive: true, captures: existing });
   },
 
   endSession: () => {
@@ -234,7 +236,11 @@ export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
       if (raw) {
         const saved = JSON.parse(raw) as AutoScanCapture[];
         if (saved.length > 0) {
-          set({ captures: saved });
+          // Merge with existing captures — don't lose anything
+          const existing = get().captures;
+          const existingIds = new Set(existing.map((c) => c.id));
+          const newOnes = saved.filter((c) => !existingIds.has(c.id));
+          set({ captures: [...existing, ...newOnes] });
         }
       }
     } catch {
