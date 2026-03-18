@@ -11,8 +11,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { File as ExpoFile, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+let ExpoFile: any = null;
+let Paths: any = null;
+let Sharing: any = null;
+try { const fs = require('expo-file-system'); ExpoFile = fs.File; Paths = fs.Paths; } catch {}
+try { Sharing = require('expo-sharing'); } catch {}
 import {
   ScreenLayout, ScreenHeader,
   EngravingLabel, PanelCard,

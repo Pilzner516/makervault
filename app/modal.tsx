@@ -4,7 +4,9 @@ import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Alert } from 'react-native';
-import { File as ExpoFile, Paths } from 'expo-file-system';
+let ExpoFile: any = null;
+let Paths: any = null;
+try { const fs = require('expo-file-system'); ExpoFile = fs.File; Paths = fs.Paths; } catch {}
 import {
   ScreenLayout, ScreenHeader,
   EngravingLabel, FieldRow, PanelCard,
