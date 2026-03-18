@@ -16,107 +16,117 @@ interface FeatureSection {
 
 const FEATURE_SECTIONS: FeatureSection[] = [
   {
-    title: 'Scanning & Identification',
+    title: 'Scan & Identify Parts',
     features: [
       {
         icon: 'scan-outline',
         name: 'AI Part Identification',
-        description: 'Point your camera at any electronic component and Gemini AI identifies it — name, manufacturer, specs, and category. Works with ICs, resistors, cables, boards, and more.',
+        description: 'Point your camera at any electronic component and AI instantly identifies it — name, manufacturer, specs, category, and markings. Works with ICs, resistors, cables, boards, connectors, and more.',
       },
       {
         icon: 'repeat-outline',
         name: 'Auto-Scan Mode',
-        description: 'Scan multiple items in rapid succession. Choose Handheld (motion-triggered), On Stand (timed), or Manual. Trace animation shows capture countdown. All items queue for batch review.',
+        description: 'Scan multiple items hands-free. Choose Handheld (captures as you hold items up) or On Stand (auto-captures at a set interval while you swap items). All items queue for batch review.',
       },
       {
         icon: 'images-outline',
         name: 'Bulk Scan',
-        description: 'Photograph a bin or tray of parts and AI identifies each one separately. Review and add/skip individual items.',
+        description: 'Photograph a bin or tray of mixed parts. AI identifies each component separately. Review and add or skip individual items one by one.',
+      },
+      {
+        icon: 'archive-outline',
+        name: 'Never Lose a Scan',
+        description: 'Every scan is saved automatically the moment it\'s captured. Take a phone call, switch apps, or close MakerVault — your unconfirmed scans are waiting when you return.',
       },
       {
         icon: 'options-outline',
-        name: 'Scan Quality Presets',
-        description: 'Choose Fast (~1.5s), Balanced (~3s), Detailed (~5s), or Maximum (~8s) quality. Higher quality reads smaller markings on SMD parts and QFP packages.',
-      },
-      {
-        icon: 'timer-outline',
-        name: 'Adjustable Scan Timing',
-        description: 'Customize auto-scan delay for Handheld (1–5s) and On Stand (2–8s) modes. Set your preferred pace in Settings.',
+        name: 'Scan Quality & Timing',
+        description: 'Choose from 4 quality levels (Fast to Maximum) to balance speed vs. accuracy for small markings. Adjust auto-scan timing for handheld and stand modes in Settings.',
       },
     ],
   },
   {
-    title: 'Inventory Management',
+    title: 'Inventory',
     features: [
       {
         icon: 'cube-outline',
-        name: 'Parts Inventory',
-        description: 'Track every component with name, manufacturer, MPN, category, quantity, specs, and notes. Filter by category, search by any field.',
+        name: 'Complete Parts Database',
+        description: 'Track every component with name, manufacturer, part number, category, quantity, specs, notes, and a photo. Filter and sort by any field.',
       },
       {
         icon: 'pencil-outline',
-        name: 'Inline Editing',
-        description: 'Tap the pencil icon on any part to edit every field — name, manufacturer, MPN, category, subcategory, description, notes, quantity, and low stock threshold.',
+        name: 'Edit Any Detail',
+        description: 'Tap the pencil icon on any part to edit everything inline — name, manufacturer, MPN, category, quantity, low stock threshold, notes, and more.',
       },
       {
         icon: 'camera-outline',
         name: 'Part Photos',
-        description: 'Each scanned part saves a quality thumbnail (480px) from the original camera image. Visible in inventory list and part detail.',
+        description: 'Every scanned part keeps a quality photo from your camera. See thumbnails in the inventory list and full images in part detail.',
       },
       {
         icon: 'notifications-outline',
         name: 'Low Stock Alerts',
-        description: 'Set a threshold per item. When quantity drops below it, alerts appear on the Home screen. Toggle alerts on/off in Settings.',
+        description: 'Set a restock threshold per item. When quantity drops below it, an alert appears on the Home screen so you never run out of critical parts.',
       },
       {
-        icon: 'archive-outline',
-        name: 'Persistent Scans',
-        description: 'Unconfirmed scans are saved automatically after every capture. Close the app, take a call, come back — your scans are waiting for review.',
+        icon: 'bookmark-outline',
+        name: 'Wishlist',
+        description: 'Keep a running list of parts you need to order. Group by supplier for efficient purchasing.',
       },
     ],
   },
   {
-    title: 'Search & Categories',
+    title: 'Organization',
     features: [
       {
         icon: 'search-outline',
         name: 'Smart Search',
-        description: 'Search across item names, manufacturers, part numbers, categories, and notes. Results update as you type.',
+        description: 'Find any part instantly. Search across names, manufacturers, part numbers, categories, and notes. Results appear as you type.',
       },
       {
         icon: 'grid-outline',
         name: 'Category Browser',
-        description: '7 default categories (Electronics, Fasteners, Tools, 3D Printing, Materials, Mechanical, Safety) with 50+ subcategories. Tap a category to drill down.',
+        description: 'Browse 7 built-in categories (Electronics, Fasteners, Tools, 3D Printing, Materials, Mechanical, Safety & PPE) with 50+ subcategories. Tap to drill down.',
       },
       {
-        icon: 'pricetag-outline',
-        name: 'Subcategory Filtering',
-        description: 'Each category shows its subcategories with item counts. Tap a subcategory to see matching parts in your inventory.',
+        icon: 'file-tray-stacked-outline',
+        name: 'Storage Locations',
+        description: 'Map your workshop — bins, shelves, drawers, pegboards, cabinets. Assign parts to locations so you always know where to find them. Supports nested locations.',
+      },
+      {
+        icon: 'qr-code-outline',
+        name: 'QR Code Labels',
+        description: 'Generate a unique QR code for each storage location. Print labels and stick them on bins and drawers. Scan any label to instantly see what\'s inside.',
+      },
+      {
+        icon: 'print-outline',
+        name: 'Print QR Labels',
+        description: 'QR codes are sized for standard label printers. Print directly from the app or export for batch printing. Each code links to that location\'s inventory.',
       },
     ],
   },
   {
-    title: 'Suppliers & Ordering',
+    title: 'Suppliers & Reordering',
     features: [
       {
         icon: 'cart-outline',
         name: 'Where to Buy',
-        description: '15 suppliers built-in: Amazon, DigiKey, Mouser, McMaster-Carr, Adafruit, SparkFun, and more. Tap any part\'s "Where to Buy" to search across suppliers instantly.',
+        description: '15 suppliers built in — Amazon, DigiKey, Mouser, McMaster-Carr, Adafruit, SparkFun, and more. Tap "Where to Buy" on any part to search across all suppliers instantly.',
       },
       {
         icon: 'star-outline',
         name: 'Favourite Suppliers',
-        description: 'Star up to 4 suppliers as favourites. They appear first on every part detail page for quick access.',
+        description: 'Star up to 4 go-to suppliers. They appear first on every part page so your preferred shops are always one tap away.',
       },
       {
         icon: 'globe-outline',
-        name: 'Country Filtering',
-        description: 'Set your country (US, UK, Canada, Australia, or Global) in Settings. Only suppliers that ship to your region are shown.',
+        name: 'Regional Suppliers',
+        description: 'Set your country in Settings (US, UK, Canada, Australia, or Global). Only suppliers that ship to your region are shown — no irrelevant results.',
       },
       {
-        icon: 'cash-outline',
-        name: 'Affiliate Codes',
-        description: 'Enter your Amazon Associates tag, Jameco AvantLink ID, or Home Depot Impact ID in Settings. Your codes are automatically appended to supplier links.',
+        icon: 'document-text-outline',
+        name: 'Datasheet Search',
+        description: 'Find datasheets for any component. One tap searches Google for the PDF datasheet by part number.',
       },
     ],
   },
@@ -126,57 +136,42 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'construct-outline',
         name: 'Project Tracking',
-        description: 'Create projects, track which parts you need vs. what you have. AI suggests project ideas based on your inventory.',
+        description: 'Create projects and track which parts you need vs. what you own. See at a glance which projects are ready to build and which need parts.',
       },
       {
         icon: 'bulb-outline',
         name: 'AI Project Ideas',
-        description: 'Gemini analyzes your inventory and suggests buildable projects — prioritizing ones where you already own most parts.',
+        description: 'AI analyzes your inventory and suggests projects you can build right now — prioritizing ones where you already own most of the required parts.',
       },
       {
         icon: 'open-outline',
-        name: 'External Projects',
-        description: 'Browse projects from Instructables matched to your parts. Tap to open the full guide in your browser.',
+        name: 'Instructables Integration',
+        description: 'Browse real projects from Instructables matched to your parts. Tap to open the full build guide in your browser.',
       },
     ],
   },
   {
-    title: 'Customization',
+    title: 'Personalization',
     features: [
       {
         icon: 'color-palette-outline',
         name: '10 Color Themes',
-        description: 'Midnight Workshop (default), Solder Smoke, Circuit Noir, PCB Green, Oscilloscope, Titanium, Neon Lab, Forge, Deep Space, and Graphene. Each with 7 background layers and coordinated colors.',
+        description: 'Choose from Midnight Workshop, Solder Smoke, Circuit Noir, PCB Green, Oscilloscope, Titanium, Neon Lab, Forge, Deep Space, or Graphene. Switch instantly in Settings.',
       },
       {
         icon: 'mic-outline',
         name: 'Voice Commands',
-        description: 'Tap the Voice card on the Home screen to search your inventory by voice. Ask "do I have any 10k resistors?" and get an instant answer.',
+        description: 'Search your inventory by voice. Ask "do I have any 10k resistors?" or "where are my servo motors?" and get an instant spoken answer.',
       },
       {
         icon: 'hand-left-outline',
         name: 'Haptic Feedback',
-        description: 'Feel a vibration on every capture, button press, and scan result. Toggle on/off in Settings.',
-      },
-    ],
-  },
-  {
-    title: 'Storage & Locations',
-    features: [
-      {
-        icon: 'file-tray-stacked-outline',
-        name: 'Storage Locations',
-        description: 'Organize parts by physical location — bins, shelves, drawers, pegboards. Nested locations supported.',
+        description: 'Feel a vibration on captures, button presses, and scan confirmations. Toggle on or off in Settings.',
       },
       {
-        icon: 'qr-code-outline',
-        name: 'QR Code Labels',
-        description: 'Generate printable QR codes for each storage location. Scan a QR to jump straight to that location\'s contents.',
-      },
-      {
-        icon: 'bookmark-outline',
-        name: 'Wishlist',
-        description: 'Keep a running list of parts to order. Group by supplier for efficient ordering.',
+        icon: 'camera-reverse-outline',
+        name: 'Front & Rear Camera',
+        description: 'Switch between front and rear cameras during scanning. Use front camera with a phone stand for hands-free operation.',
       },
     ],
   },
