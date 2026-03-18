@@ -64,23 +64,27 @@ export default function CategoryScreen() {
     })();
   }, [id]);
 
-  // Same keyword mapping as search screen for accurate counting
+  // Must match search screen's CAT_KEYWORDS exactly
   const CAT_KEYWORDS: Record<string, string[]> = {
-    'electronics': ['resistor', 'capacitor', 'inductor', 'led', 'diode', 'transistor', 'ic', 'microcontroller', 'sensor', 'connector', 'switch', 'relay', 'crystal', 'fuse', 'display', 'module', 'cable', 'wire', 'board', 'arduino', 'raspberry', 'esp', 'power', 'voltage', 'charger', 'adapter', 'usb', 'hdmi', 'electronic'],
-    'fasteners': ['bolt', 'screw', 'nut', 'washer', 'rivet', 'standoff', 'anchor', 'clip', 'pin', 'insert', 'fastener'],
-    'tools': ['tool', 'hammer', 'wrench', 'screwdriver', 'plier', 'solder', 'multimeter', 'clamp', 'saw', 'drill', 'cutter', 'measure'],
-    '3d printing': ['filament', 'pla', 'petg', 'abs', 'resin', 'nozzle', 'hotend', 'printer', '3d print', 'bed', 'stepper'],
-    'materials': ['alumin', 'steel', 'wood', 'timber', 'acrylic', 'foam', 'adhesive', 'tape', 'sheet', 'stock', 'material', 'copper', 'pcb'],
-    'mechanical': ['bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'motor', 'coupling', 'actuator', 'servo', 'mechanical'],
-    'safety & ppe': ['safety', 'glove', 'goggle', 'mask', 'respirator', 'ear', 'protection', 'ppe'],
+    'electronics': ['electronic', 'resistor', 'capacitor', 'inductor', 'led', 'diode', 'transistor', 'ic', 'microcontroller', 'sensor', 'connector', 'switch', 'relay', 'crystal', 'fuse', 'display', 'module', 'cable', 'wire', 'board', 'arduino', 'raspberry', 'esp', 'power', 'voltage', 'charger', 'adapter', 'usb', 'hdmi', 'battery', 'circuit', 'transformer', 'regulator', 'amplifier', 'antenna', 'bluetooth', 'wifi', 'buzzer', 'speaker', 'potentiometer', 'encoder', 'converter', 'inverter', 'rectifier', 'oscillator', 'timer', 'jumper', 'breadboard', 'proto', 'shield', 'breakout', 'header', 'socket', 'terminal', 'crimp', 'barrel jack', 'dc jack', 'charging'],
+    'fasteners': ['fastener', 'bolt', 'screw', 'nut', 'washer', 'rivet', 'standoff', 'anchor', 'clip', 'pin', 'insert', 'nail', 'staple', 'bracket', 'hinge', 'latch', 'hook', 'hex', 'phillips', 'torx', 'allen'],
+    'tools': ['tool', 'hammer', 'wrench', 'screwdriver', 'plier', 'solder', 'multimeter', 'clamp', 'saw', 'drill', 'cutter', 'measure', 'ruler', 'caliper', 'level', 'vise', 'file', 'chisel', 'tweezers', 'desoldering', 'heat gun', 'glue gun', 'crimper', 'stripper', 'iron'],
+    '3d printing': ['3d print', 'filament', 'pla', 'petg', 'abs', 'tpu', 'resin', 'nozzle', 'hotend', 'extruder', 'bed', 'build plate', 'stepper', 'ender', 'prusa', 'bambu', 'creality'],
+    'materials': ['material', 'alumin', 'steel', 'wood', 'timber', 'acrylic', 'foam', 'adhesive', 'epoxy', 'tape', 'sheet', 'stock', 'copper', 'pcb', 'brass', 'plastic', 'rubber', 'silicone', 'paint', 'primer', 'sealant', 'lubricant'],
+    'mechanical': ['mechanical', 'bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'linear', 'motor', 'coupling', 'actuator', 'servo', 'shaft', 'rod', 'bushing', 'cam', 'chain', 'sprocket', 'valve', 'gasket', 'o-ring'],
+    'safety & ppe': ['safety', 'glove', 'goggle', 'glasses', 'mask', 'respirator', 'ear', 'protection', 'ppe', 'first aid', 'fire', 'extinguisher', 'apron'],
   };
 
   const matchesCategory = (p: typeof parts[0], catName: string): boolean => {
-    const keywords = CAT_KEYWORDS[catName.toLowerCase()] ?? [catName.toLowerCase()];
+    const lower = catName.toLowerCase();
     const pCat = (p.category ?? '').toLowerCase();
+    // Exact match first (new scans use exact category names)
+    if (pCat === lower) return true;
+    // Keyword fallback for legacy items
+    const keywords = CAT_KEYWORDS[lower] ?? [lower];
     const pName = p.name.toLowerCase();
     const pSub = (p.subcategory ?? '').toLowerCase();
-    return keywords.some((kw) => pCat.includes(kw) || pName.includes(kw) || pSub.includes(kw)) || pCat.includes(catName.toLowerCase());
+    return keywords.some((kw) => pCat.includes(kw) || pName.includes(kw) || pSub.includes(kw));
   };
 
   const categoryParts = category ? parts.filter((p) => matchesCategory(p, category.name)) : [];

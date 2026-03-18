@@ -76,15 +76,16 @@ export default function SearchScreen() {
     );
   }, [parts, query]);
 
-  // Map parent categories to likely part categories
+  // Comprehensive keyword mapping for category matching
+  // Covers both exact Gemini categories AND legacy/fuzzy terms
   const CAT_KEYWORDS: Record<string, string[]> = {
-    'electronics': ['resistor', 'capacitor', 'inductor', 'led', 'diode', 'transistor', 'ic', 'microcontroller', 'sensor', 'connector', 'switch', 'relay', 'crystal', 'fuse', 'display', 'module', 'cable', 'wire', 'board', 'arduino', 'raspberry', 'esp', 'power', 'voltage', 'charger', 'adapter', 'usb', 'hdmi', 'electronic'],
-    'fasteners': ['bolt', 'screw', 'nut', 'washer', 'rivet', 'standoff', 'anchor', 'clip', 'pin', 'insert', 'fastener'],
-    'tools': ['tool', 'hammer', 'wrench', 'screwdriver', 'plier', 'solder', 'multimeter', 'clamp', 'saw', 'drill', 'cutter', 'measure'],
-    '3d printing': ['filament', 'pla', 'petg', 'abs', 'resin', 'nozzle', 'hotend', 'printer', '3d print', 'bed', 'stepper'],
-    'materials': ['alumin', 'steel', 'wood', 'timber', 'acrylic', 'foam', 'adhesive', 'tape', 'sheet', 'stock', 'material', 'copper', 'pcb'],
-    'mechanical': ['bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'motor', 'coupling', 'actuator', 'servo', 'mechanical'],
-    'safety & ppe': ['safety', 'glove', 'goggle', 'mask', 'respirator', 'ear', 'protection', 'ppe'],
+    'electronics': ['electronic', 'resistor', 'capacitor', 'inductor', 'led', 'diode', 'transistor', 'ic', 'microcontroller', 'sensor', 'connector', 'switch', 'relay', 'crystal', 'fuse', 'display', 'module', 'cable', 'wire', 'board', 'arduino', 'raspberry', 'esp', 'power', 'voltage', 'charger', 'adapter', 'usb', 'hdmi', 'battery', 'circuit', 'transformer', 'regulator', 'amplifier', 'op-amp', 'antenna', 'bluetooth', 'wifi', 'gps', 'piezo', 'buzzer', 'speaker', 'potentiometer', 'encoder', 'decoder', 'converter', 'inverter', 'rectifier', 'oscillator', 'timer', 'counter', 'shift register', 'dac', 'adc', 'uart', 'spi', 'i2c', 'can bus', 'ethernet', 'coax', 'rj45', 'jumper', 'breadboard', 'proto', 'shield', 'breakout', 'header', 'socket', 'terminal', 'crimp', 'dupont', 'jst', 'molex', 'barrel jack', 'dc jack', 'charging'],
+    'fasteners': ['fastener', 'bolt', 'screw', 'nut', 'washer', 'rivet', 'standoff', 'anchor', 'clip', 'pin', 'insert', 'nail', 'staple', 'cleat', 'bracket', 'hinge', 'latch', 'hook', 'eye bolt', 'wing nut', 'hex', 'phillips', 'torx', 'allen'],
+    'tools': ['tool', 'hammer', 'wrench', 'screwdriver', 'plier', 'solder', 'multimeter', 'clamp', 'saw', 'drill', 'cutter', 'measure', 'ruler', 'caliper', 'level', 'tape measure', 'vise', 'file', 'rasp', 'chisel', 'punch', 'awl', 'tweezers', 'desoldering', 'heat gun', 'glue gun', 'crimper', 'stripper', 'iron', 'station', 'probe', 'oscilloscope', 'logic analyzer', 'bench supply'],
+    '3d printing': ['3d print', 'filament', 'pla', 'petg', 'abs', 'tpu', 'resin', 'nozzle', 'hotend', 'extruder', 'bed', 'build plate', 'stepper', 'ender', 'prusa', 'bambu', 'creality', 'bowden', 'direct drive', 'layer', 'infill', 'slicer', 'gcode'],
+    'materials': ['material', 'alumin', 'steel', 'wood', 'timber', 'acrylic', 'plexiglass', 'foam', 'adhesive', 'epoxy', 'tape', 'sheet', 'stock', 'copper', 'pcb', 'brass', 'plastic', 'rubber', 'silicone', 'carbon fiber', 'fiberglass', 'fabric', 'leather', 'vinyl', 'paint', 'primer', 'sealant', 'lubricant', 'grease', 'oil'],
+    'mechanical': ['mechanical', 'bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'linear', 'motor', 'coupling', 'actuator', 'servo', 'shaft', 'rod', 'bushing', 'cam', 'chain', 'sprocket', 'pneumatic', 'hydraulic', 'piston', 'valve', 'gasket', 'o-ring', 'seal'],
+    'safety & ppe': ['safety', 'glove', 'goggle', 'glasses', 'mask', 'respirator', 'ear', 'protection', 'ppe', 'first aid', 'fire', 'extinguisher', 'apron', 'shield', 'ventilation', 'fume'],
   };
 
   const getCatCount = (catName: string) => {
@@ -94,8 +95,10 @@ export default function SearchScreen() {
       const pCat = (p.category ?? '').toLowerCase();
       const pName = p.name.toLowerCase();
       const pSub = (p.subcategory ?? '').toLowerCase();
-      return keywords.some((kw) => pCat.includes(kw) || pName.includes(kw) || pSub.includes(kw)) ||
-        pCat.includes(lower);
+      // Exact category match first (items scanned with new prompt)
+      if (pCat === lower) return true;
+      // Keyword fallback (legacy items or fuzzy matching)
+      return keywords.some((kw) => pCat.includes(kw) || pName.includes(kw) || pSub.includes(kw));
     }).length;
   };
 

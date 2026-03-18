@@ -54,29 +54,34 @@ export async function generateJSON<T>(prompt: string): Promise<T> {
   return JSON.parse(extractJSON(text)) as T;
 }
 
-const IDENTIFY_PROMPT = `You are an expert electronics component identifier.
-Analyze this image and identify the electronic component shown.
+const IDENTIFY_PROMPT = `You are an expert maker/workshop inventory identifier.
+Analyze this image and identify the item shown. This could be ANY workshop item — not just electronics.
 
-Rules for part_name — THIS IS CRITICAL:
-- Write it exactly like an Amazon/eBay product listing title
-- Start with WHAT IT IS, not model numbers or part numbers
-- Good: "Fitbit Charging Cable USB 3ft" — bad: "370-0064-01 Fitbit"
-- Good: "HDMI Cable Male-to-Male 6ft Black" — bad: "G6GLO HDMI"
-- Good: "Arduino Nano V3 Microcontroller Board" — bad: "ATmega328P Board"
-- Include: purpose, connector types, length/size, brand if recognizable
-- NEVER start with a model number, part number, or code
-- NEVER use "Generic", "Unknown", "N/A", or "Not specified"
-- If you don't know the manufacturer, leave manufacturer as ""
-- Put model/part numbers in the mpn field, NOT in part_name
+CATEGORY RULES — YOU MUST assign one of these exact categories:
+- "Electronics" — subcategories: Microcontrollers, Resistors, Capacitors, Switches, LEDs, Displays, Sensors, Power Supply, Connectors, Modules, Cables, Wires, Adapters, Chargers, Batteries, Circuit Boards, ICs, Transistors, Diodes, Relays, Crystals, Fuses
+- "Fasteners" — subcategories: Bolts & Screws, Nuts, Washers, Standoffs, Rivets, Anchors, Clips, Pins, Threaded Inserts
+- "Tools" — subcategories: Hand Tools, Power Tools, Measuring, Soldering, Cutting, Clamps & Vises, Safety Equipment
+- "3D Printing" — subcategories: Filament PLA, Filament PETG, Filament ABS, Resin, Bed Adhesive, Nozzles, Print Beds, Stepper Motors, Belts & Pulleys
+- "Materials" — subcategories: Aluminium Stock, Steel Stock, Timber, Acrylic, Foam, Adhesives, Consumables, Tape, Heat Shrink, Solder
+- "Mechanical" — subcategories: Bearings, Belts & Pulleys, Springs, Gears, Linear Rails, Motors, Couplings, Servos
+- "Safety & PPE" — subcategories: Eye Protection, Gloves, Ear Protection, Masks & Respirators
+
+If the item doesn't fit perfectly, choose the CLOSEST category. Every item gets a category — never leave it empty.
+
+Rules for part_name:
+- Write it like an Amazon product listing title
+- Start with WHAT IT IS: "USB-C Charging Cable 6ft" not "370-0064-01"
+- Include: purpose, type, size/length, brand if visible
+- NEVER start with model numbers or codes
+- NEVER use "Generic", "Unknown", "N/A"
+- Put model/part numbers in the mpn field only
 
 Rules for specs:
-- Always include physical attributes you can estimate: length, size, weight, connector_type, color, gauge, pin_count
-- For cables: include length, connector_a, connector_b, color
-- For resistors/caps: include resistance/capacitance, tolerance, wattage, package
-- For ICs: include pin_count, package, voltage
-- Only include specs you can actually determine from the image. Leave manufacturer and mpn as empty strings "" if unknown.
+- Include physical attributes: length, size, color, connector_type, gauge, pin_count, voltage, resistance
+- Only include specs visible or determinable from the image
+- Leave manufacturer and mpn as "" if unknown
 
-Return a JSON object with:
+Return JSON:
 {
   "part_name": string,
   "manufacturer": string,
@@ -91,13 +96,14 @@ Return a JSON object with:
   ]
 }
 
-IMPORTANT: If the image shows multiple different items, only identify the ONE most prominent or centered item. Do NOT combine multiple items into a single entry (e.g. do NOT say "Cable Set" or "3-pack"). Each scan should identify exactly ONE component.
+IMPORTANT: Only identify the ONE most prominent/centered item. Do NOT combine multiple items.
+If you cannot identify the item, set confidence below 0.3.`;
 
-If you cannot identify the component, set confidence below 0.3 and explain in part_name.`;
+const BULK_IDENTIFY_PROMPT = `You are an expert maker/workshop inventory identifier.
+This image shows multiple items. Identify each distinct item visible.
 
-const BULK_IDENTIFY_PROMPT = `You are an expert electronics component identifier.
-This image shows multiple electronic components (e.g. a bin or tray of parts).
-Identify each distinct component visible.
+Use these exact categories: Electronics, Fasteners, Tools, 3D Printing, Materials, Mechanical, Safety & PPE.
+Choose the closest category for each item. Every item must have a category and subcategory.
 
 Return a JSON array of objects, each with:
 {
