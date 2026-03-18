@@ -5,8 +5,12 @@ import { useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
-import { File as ExpoFile } from 'expo-file-system';
+// Lazy-loaded to avoid native module crash if not in build
+let DocumentPicker: typeof import('expo-document-picker') | null = null;
+try { DocumentPicker = require('expo-document-picker'); } catch {}
+
+let ExpoFile: typeof import('expo-file-system').File | null = null;
+try { ExpoFile = require('expo-file-system').File; } catch {}
 import {
   ScreenLayout, ScreenHeader, PanelCard, PrimaryButton, SecondaryButton,
   EngravingLabel, EmptyState,
@@ -122,6 +126,11 @@ export default function ImportScreen() {
       setItems([]);
       setImportResult(null);
 
+      if (!DocumentPicker) {
+        setParseError('Document picker is not available. Please rebuild the app.');
+        return;
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
         type: ['text/csv', 'text/comma-separated-values', 'application/csv', '*/*'],
         copyToCacheDirectory: true,
@@ -136,8 +145,14 @@ export default function ImportScreen() {
 
       let content: string;
       try {
-        const expoFile = new ExpoFile(file.uri);
-        content = await expoFile.text();
+        if (ExpoFile) {
+          const expoFile = new ExpoFile(file.uri);
+          content = await expoFile.text();
+        } else {
+          // Fallback: fetch the file URI
+          const resp = await fetch(file.uri);
+          content = await resp.text();
+        }
       } catch {
         setParseError('Could not read the file. Please make sure it is a valid text/CSV file.');
         return;
