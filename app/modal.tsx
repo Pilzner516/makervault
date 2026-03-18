@@ -31,6 +31,10 @@ export default function SettingsScreen() {
     setHapticFeedback,
     scanQuality,
     setScanQuality,
+    handheldDelay,
+    standDelay,
+    setHandheldDelay,
+    setStandDelay,
     init: initSettings,
   } = useSettingsStore();
   const {
@@ -144,6 +148,28 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             );
           })}
+        </PanelCard>
+
+        {/* Auto-Scan Timing */}
+        <EngravingLabel label="Auto-Scan Timing" />
+        <PanelCard>
+          <TimingRow
+            label="Handheld delay"
+            description="Time between captures when holding phone"
+            value={handheldDelay}
+            options={[1.0, 1.5, 2.0, 3.0, 5.0]}
+            onSelect={setHandheldDelay}
+            colors={colors}
+          />
+          <TimingRow
+            label="On Stand delay"
+            description="Time between captures when phone is propped"
+            value={standDelay}
+            options={[2.0, 3.0, 3.5, 5.0, 8.0]}
+            onSelect={setStandDelay}
+            colors={colors}
+            isLast
+          />
         </PanelCard>
 
         {/* Theme Picker */}
@@ -314,6 +340,43 @@ export default function SettingsScreen() {
         </PanelCard>
       </ScrollView>
     </ScreenLayout>
+  );
+}
+
+function TimingRow({
+  label, description, value, options, onSelect, colors, isLast,
+}: {
+  label: string; description: string; value: number; options: number[];
+  onSelect: (v: number) => void;
+  colors: { textSecondary: string; textMuted: string; accent: string; accentBg: string; accentBorder: string; borderSubtle: string; bgDeep: string; borderDefault: string };
+  isLast?: boolean;
+}) {
+  return (
+    <View style={{
+      paddingHorizontal: Spacing.md, paddingVertical: 12,
+      borderBottomWidth: isLast ? 0 : 1, borderBottomColor: colors.borderSubtle,
+    }}>
+      <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, marginBottom: 8 }}>{description}</Text>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {options.map((opt) => {
+          const active = Math.abs(value - opt) < 0.01;
+          return (
+            <TouchableOpacity key={opt} activeOpacity={0.75}
+              style={{
+                flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 4, borderWidth: 1,
+                backgroundColor: active ? colors.accentBg : colors.bgDeep,
+                borderColor: active ? colors.accentBorder : colors.borderDefault,
+              }}
+              onPress={() => onSelect(opt)}>
+              <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: active ? colors.accent : colors.textMuted }}>
+                {opt}s
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 

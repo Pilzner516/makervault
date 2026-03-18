@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenLayout, EmptyState, ModeButton } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
 import { useAutoScanStore, TriggerMode } from '@/lib/zustand/autoScanStore';
+import { useSettingsStore } from '@/lib/zustand/settingsStore';
 
 const Haptics = Platform.OS !== 'web'
   ? require('expo-haptics') as typeof import('expo-haptics')
@@ -30,6 +31,7 @@ export default function AutoScanScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { handheldDelay, standDelay } = useSettingsStore();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('back');
@@ -70,7 +72,7 @@ export default function AutoScanScreen() {
   const startStandDetection = useCallback(() => {
     standRunning.current = true;
     setDetectPhase('settling');
-    const delay = triggerMode === 'stillness' ? 2000 : 3500;
+    const delay = triggerMode === 'stillness' ? handheldDelay * 1000 : standDelay * 1000;
 
     const cycle = () => {
       if (!standRunning.current) return;

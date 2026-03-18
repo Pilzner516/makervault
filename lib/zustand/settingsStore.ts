@@ -73,6 +73,8 @@ interface SettingsStore {
   voiceEnabled: boolean;
   hapticFeedbackEnabled: boolean;
   scanQuality: ScanQuality;
+  handheldDelay: number;  // seconds
+  standDelay: number;     // seconds
   initialized: boolean;
 
   setLowStockAlerts: (enabled: boolean) => void;
@@ -81,6 +83,8 @@ interface SettingsStore {
   setHapticFeedback: (enabled: boolean) => void;
   setScanQuality: (quality: ScanQuality) => void;
   getScanPreset: () => ScanQualityPreset;
+  setHandheldDelay: (seconds: number) => void;
+  setStandDelay: (seconds: number) => void;
   init: () => Promise<void>;
 }
 
@@ -92,6 +96,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   voiceEnabled: true,
   hapticFeedbackEnabled: true,
   scanQuality: 'balanced',
+  handheldDelay: 2.0,
+  standDelay: 3.5,
   initialized: false,
 
   setLowStockAlerts: (enabled) => {
@@ -114,6 +120,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ scanQuality: quality });
     persistSettings(get());
   },
+  setHandheldDelay: (seconds) => {
+    set({ handheldDelay: seconds });
+    persistSettings(get());
+  },
+  setStandDelay: (seconds) => {
+    set({ standDelay: seconds });
+    persistSettings(get());
+  },
   getScanPreset: () => {
     return SCAN_QUALITY_PRESETS.find((p) => p.id === get().scanQuality) ?? SCAN_QUALITY_PRESETS[1];
   },
@@ -130,6 +144,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           voiceEnabled: saved.voiceEnabled ?? true,
           hapticFeedbackEnabled: saved.hapticFeedbackEnabled ?? true,
           scanQuality: saved.scanQuality ?? 'balanced',
+          handheldDelay: saved.handheldDelay ?? 2.0,
+          standDelay: saved.standDelay ?? 3.5,
         });
       }
     } catch {
@@ -146,6 +162,8 @@ function persistSettings(state: SettingsStore) {
     voiceEnabled: state.voiceEnabled,
     hapticFeedbackEnabled: state.hapticFeedbackEnabled,
     scanQuality: state.scanQuality,
+    handheldDelay: state.handheldDelay,
+    standDelay: state.standDelay,
   };
   AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
 }
