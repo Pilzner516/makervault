@@ -97,7 +97,14 @@ export default function PartDetailScreen() {
   const mfgClean = clean(part?.manufacturer);
   const nameClean = clean(part?.name) ?? '';
   const shortName = nameClean.split(/[\s,]+/).slice(0, 6).join(' ');
-  const searchQuery = mpnClean ? [mpnClean, mfgClean].filter(Boolean).join(' ') : [shortName, mfgClean].filter(Boolean).join(' ');
+
+  // Search query strategy:
+  // Always lead with the DESCRIPTIVE NAME (what retailers index)
+  // Then append MPN as secondary detail after a comma
+  // Amazon/general retailers: "Raspberry Pi Zero 2 W" finds results
+  // Specialty retailers: "LM7805CT" also finds results via the MPN
+  const searchQuery = [shortName, mpnClean ? `, ${mpnClean}` : '', mfgClean ? ` ${mfgClean}` : '']
+    .filter(Boolean).join('').trim();
 
   // Google search helpers (always available)
   const extraLinks = [

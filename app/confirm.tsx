@@ -181,17 +181,23 @@ export default function ConfirmScreen() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Single-part confirm
+  const [isSavingSingle, setIsSavingSingle] = useState(false);
+
+  // Single-part confirm — disable button immediately to prevent double-tap
   const handleConfirm = async (identification: GeminiIdentification) => {
+    if (isSavingSingle) return;
+    setIsSavingSingle(true);
     try {
       await saveOnePart(identification);
       logFeedback(altIndex >= 0 ? 'chose_alternative' : 'confirmed', identification.mpn);
       setSaved(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
-      if (msg === 'Cancelled') return; // User cancelled duplicate dialog
+      if (msg === 'Cancelled') { setIsSavingSingle(false); return; }
       console.error('Save failed:', msg);
       setSaveError(msg);
+    } finally {
+      setIsSavingSingle(false);
     }
   };
 
@@ -603,8 +609,9 @@ export default function ConfirmScreen() {
         {/* Action buttons */}
         <View style={{ marginTop: Spacing.lg }}>
           <PrimaryButton
-            label="Confirm & Save"
+            label={isSavingSingle ? "SAVING..." : "Confirm & Save"}
             icon="checkmark-circle-outline"
+            disabled={isSavingSingle}
             onPress={() => handleConfirm(displayedResult)}
           />
           <SecondaryButton

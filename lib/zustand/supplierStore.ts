@@ -219,7 +219,10 @@ export const useSupplierStore = create<SupplierStore>((set, get) => ({
   },
 
   getSupplierUrl: (supplier, query) => {
-    const encoded = encodeURIComponent(query);
+    // Clean up the query: remove commas (some retailers don't handle them well)
+    // and trim excessive whitespace
+    const cleanQuery = query.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+    const encoded = encodeURIComponent(cleanQuery);
     const settings = get().userSettings;
 
     // Check if affiliate URL is available and user has the code
