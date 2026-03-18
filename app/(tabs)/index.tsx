@@ -118,10 +118,11 @@ export default function HomeScreen() {
                 ]}>
                   <Ionicons name={c.icon as any} size={24} color={colors.accent} />
                 </View>
-                <Text style={[s.launchLabel, { color: c.highlight ? colors.accent : colors.textSecondary }]}>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+                  style={[s.launchLabel, { color: c.highlight ? colors.accent : colors.textSecondary }]}>
                   {c.label}
                 </Text>
-                <Text style={[s.launchSub, { color: colors.textMuted }]}>{c.sub}</Text>
+                <Text numberOfLines={1} style={[s.launchSub, { color: colors.textMuted }]}>{c.sub}</Text>
               </PanelCard>
             </TouchableOpacity>
           ))}
