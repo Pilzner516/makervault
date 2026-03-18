@@ -59,48 +59,69 @@ export default function AutoScanScreen() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
-      stopMotionDetection();
-      stopStandDetection();
+      stopAutoLoop();
       endSession();
     };
   }, []);
 
-  // Timed auto-capture cycle — 2s for handheld, 3.5s for stand
-  const standTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const standRunning = useRef(false);
+  // Auto-capture cycle — reads delay from refs so it's always current
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoLoopRunning = useRef(false);
 
-  const startStandDetection = useCallback(() => {
-    standRunning.current = true;
+  const scheduleNextCapture = () => {
+    if (!autoLoopRunning.current) return;
+    // Read current delay directly from store — no stale closures
+    const state = useSettingsStore.getState();
+    const currentMode = useAutoScanStore.getState().triggerMode;
+    const delay = currentMode === 'stillness' ? state.handheldDelay * 1000 : state.standDelay * 1000;
+
     setDetectPhase('settling');
-    const delay = triggerMode === 'stillness' ? handheldDelay * 1000 : standDelay * 1000;
+    autoTimerRef.current = setTimeout(() => {
+      if (!autoLoopRunning.current) return;
+      setDetectPhase('ready');
+      // Play trace then capture — doCapture will call scheduleNextCapture after
+      if (isCapturingRef.current || !cameraRef.current) {
+        scheduleNextCapture(); // retry if busy
+        return;
+      }
+      setShowTrace(true);
+      traceTopOp.setValue(0);
+      traceRightOp.setValue(0);
+      traceBottomOp.setValue(0);
+      traceLeftOp.setValue(0);
+      Animated.sequence([
+        Animated.timing(traceTopOp, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.timing(traceRightOp, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.timing(traceBottomOp, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.timing(traceLeftOp, { toValue: 1, duration: 250, useNativeDriver: true }),
+      ]).start(() => {
+        setShowTrace(false);
+        doCapture();
+      });
+    }, delay);
+  };
 
-    const cycle = () => {
-      if (!standRunning.current) return;
-      setDetectPhase('settling');
-      standTimerRef.current = setTimeout(() => {
-        if (!standRunning.current) return;
-        setDetectPhase('ready');
-        playTraceAndCapture();
-      }, delay);
-    };
-    cycle();
-  }, []);
+  const startAutoLoop = () => {
+    autoLoopRunning.current = true;
+    scheduleNextCapture();
+  };
 
-  const stopStandDetection = () => {
-    standRunning.current = false;
-    if (standTimerRef.current) {
-      clearTimeout(standTimerRef.current);
-      standTimerRef.current = null;
+  const stopAutoLoop = () => {
+    autoLoopRunning.current = false;
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
     }
   };
 
+  // Start/stop based on trigger mode
   useEffect(() => {
     if (triggerMode === 'timer') {
-      startStandDetection();
+      startAutoLoop();
     } else {
-      stopStandDetection();
+      stopAutoLoop();
     }
-    return () => stopStandDetection();
+    return () => stopAutoLoop();
   }, [triggerMode]);
 
   useEffect(() => {
@@ -131,43 +152,18 @@ export default function AutoScanScreen() {
   const traceBottomOp = useRef(new Animated.Value(0)).current;
   const traceLeftOp = useRef(new Animated.Value(0)).current;
 
-  // ─── HANDHELD MODE ───
-  // Uses the same timed cycle as stand mode but with a shorter interval (2.5s)
-  // Accelerometer will be added when dev build includes expo-sensors
-  const startMotionDetection = useCallback(() => {
-    startStandDetection();
-  }, [startStandDetection]);
+  // Both handheld and stand use the same auto-loop
+  const startMotionDetection = () => startAutoLoop();
+  const stopMotionDetection = () => stopAutoLoop();
 
-  const stopMotionDetection = () => {
-    stopStandDetection();
-  };
-
-  const playTraceAndCapture = useCallback(() => {
-    if (isCapturingRef.current || !cameraRef.current) return;
-
-    setShowTrace(true);
-    traceTopOp.setValue(0);
-    traceRightOp.setValue(0);
-    traceBottomOp.setValue(0);
-    traceLeftOp.setValue(0);
-
-    Animated.sequence([
-      Animated.timing(traceTopOp, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.timing(traceRightOp, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.timing(traceBottomOp, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.timing(traceLeftOp, { toValue: 1, duration: 250, useNativeDriver: true }),
-    ]).start(() => {
-      setShowTrace(false);
-      doCapture();
-    });
-  }, []);
-
-  const doCapture = useCallback(async () => {
+  const doCapture = async () => {
     if (isCapturingRef.current || !cameraRef.current) return;
 
     isCapturingRef.current = true;
     setIsCapturing(true);
     Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const currentMode = useAutoScanStore.getState().triggerMode;
 
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
@@ -175,29 +171,29 @@ export default function AutoScanScreen() {
         flashViewfinder();
         addCapture(photo.uri);
 
-        if (triggerMode === 'stillness') {
-          // Handheld: restart accelerometer detection
-          setTimeout(() => startMotionDetection(), 500);
-        } else if (triggerMode === 'timer') {
-          // On Stand: restart scene detection
-          setTimeout(() => startStandDetection(), 500);
+        if (currentMode === 'stillness' || currentMode === 'timer') {
+          // Auto modes: schedule next capture after a brief pause
+          setTimeout(() => scheduleNextCapture(), 300);
         } else {
+          // Manual mode
           setTimeout(() => showNextItemPrompt(), 500);
         }
       }
     } catch {
-      // Camera capture failed — restart detection
-      if (triggerMode === 'stillness') startMotionDetection();
+      // Camera capture failed — try again
+      if (currentMode !== 'manual') setTimeout(() => scheduleNextCapture(), 1000);
     } finally {
       isCapturingRef.current = false;
       setIsCapturing(false);
     }
-  }, [addCapture, triggerMode, startMotionDetection]);
+  };
 
   const handleViewfinderTap = () => {
-    if (triggerMode === 'stillness' && !isCapturingRef.current) {
-      // First tap starts auto-scan — begin motion detection
-      startMotionDetection();
+    if (triggerMode === 'manual') {
+      doCapture();
+    } else if (!autoLoopRunning.current && !isCapturingRef.current) {
+      // First tap starts the auto-loop
+      startAutoLoop();
     }
   };
 
@@ -225,8 +221,7 @@ export default function AutoScanScreen() {
   const handleDone = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
-    stopMotionDetection();
-    stopStandDetection();
+    stopAutoLoop();
     endSession();
     router.replace('/auto-scan-review' as any);
   };
@@ -299,7 +294,7 @@ export default function AutoScanScreen() {
 
         {/* Viewfinder — ABSOLUTELY POSITIONED at screen center, independent of all flex layout */}
         <View style={s.viewfinderAbsolute} pointerEvents="box-none">
-          <TouchableOpacity activeOpacity={1} onPress={triggerMode === 'stillness' ? handleViewfinderTap : triggerMode === 'manual' ? doCapture : undefined}>
+          <TouchableOpacity activeOpacity={1} onPress={handleViewfinderTap}>
             <View style={[s.viewfinder, { borderColor: viewfinderColor }]}>
               <View style={[s.corner, { top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderColor: viewfinderColor }]} />
               <View style={[s.corner, { top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderColor: viewfinderColor }]} />
@@ -322,16 +317,13 @@ export default function AutoScanScreen() {
           {/* Phase label — below viewfinder but still absolute to screen */}
           <View style={[s.phaseBadge, { backgroundColor: 'rgba(0,0,0,0.7)', marginTop: 12 }]}>
             <Text style={[s.phaseText, { color: viewfinderColor }]}>
-              {triggerMode === 'stillness'
-                ? detectPhase === 'waiting' ? 'WATCHING FOR MOTION...'
-                : detectPhase === 'motion' ? 'MOTION DETECTED'
-                : detectPhase === 'settling' ? 'HOLD STILL...'
-                : detectPhase === 'ready' ? 'CAPTURING...'
-                : 'HANDHELD AUTO-SCAN'
-              : triggerMode === 'timer'
-                ? detectPhase === 'ready' ? 'CAPTURING...'
-                : 'SWAP ITEM NOW · NEXT SCAN IN 3S'
-                : 'TAP VIEWFINDER TO CAPTURE'}
+              {triggerMode === 'manual'
+                ? 'TAP TO CAPTURE'
+                : !autoLoopRunning.current
+                  ? 'TAP TO START AUTO-SCAN'
+                  : detectPhase === 'ready' ? 'CAPTURING...'
+                  : detectPhase === 'settling' ? `NEXT SCAN IN ${triggerMode === 'stillness' ? handheldDelay : standDelay}S`
+                  : 'AUTO-SCANNING'}
             </Text>
           </View>
 
