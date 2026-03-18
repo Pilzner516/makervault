@@ -63,15 +63,14 @@ export default function AutoScanScreen() {
     };
   }, []);
 
-  // Stand/fallback mode — timed auto-capture cycle
-  // Captures every 3.5 seconds. User swaps items during the gap.
-  // Simple, reliable, no false positives from camera noise.
+  // Timed auto-capture cycle — 2s for handheld, 3.5s for stand
   const standTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const standRunning = useRef(false);
 
   const startStandDetection = useCallback(() => {
     standRunning.current = true;
     setDetectPhase('settling');
+    const delay = triggerMode === 'stillness' ? 2000 : 3500;
 
     const cycle = () => {
       if (!standRunning.current) return;
@@ -80,8 +79,7 @@ export default function AutoScanScreen() {
         if (!standRunning.current) return;
         setDetectPhase('ready');
         playTraceAndCapture();
-        // After capture completes, doCapture restarts via startStandDetection
-      }, 3500);
+      }, delay);
     };
     cycle();
   }, []);
