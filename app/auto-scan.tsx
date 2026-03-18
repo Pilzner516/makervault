@@ -58,20 +58,80 @@ export default function AutoScanScreen() {
       if (timerRef.current) clearInterval(timerRef.current);
       if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
       stopMotionDetection();
+      stopStandDetection();
       endSession();
     };
   }, []);
 
-  // Stand mode — auto-captures at fixed interval
-  useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (triggerMode === 'timer') {
-      setDetectPhase('settling');
-      timerRef.current = setInterval(() => {
-        playTraceAndCapture();
-      }, STAND_CAPTURE_INTERVAL);
+  // Stand mode — scene change detection via tiny snapshot brightness comparison
+  const standRef = useRef<{ running: boolean; lastSize: number; stillSince: number; interval: ReturnType<typeof setInterval> | null }>({
+    running: false, lastSize: 0, stillSince: 0, interval: null,
+  });
+
+  const startStandDetection = useCallback(() => {
+    const state = standRef.current;
+    state.running = true;
+    state.lastSize = 0;
+    state.stillSince = 0;
+    setDetectPhase('waiting');
+
+    state.interval = setInterval(async () => {
+      if (!state.running || isCapturingRef.current || !cameraRef.current) return;
+
+      try {
+        // Take the tiniest possible snapshot — just to compare file size
+        const snap = await cameraRef.current.takePictureAsync({ quality: 0.01 });
+        if (!snap) return;
+
+        // File size of even a tiny JPEG changes when the scene changes
+        const size = snap.width * snap.height;
+
+        if (state.lastSize === 0) {
+          state.lastSize = size;
+          return;
+        }
+
+        const diff = Math.abs(size - state.lastSize) / Math.max(state.lastSize, 1);
+        state.lastSize = size;
+
+        if (diff > 0.03) {
+          // Scene changed — item was swapped
+          setDetectPhase('motion');
+          state.stillSince = 0;
+        } else {
+          // Scene stable
+          if (state.stillSince === 0) {
+            state.stillSince = Date.now();
+            setDetectPhase('settling');
+          } else if (Date.now() - state.stillSince > STILLNESS_THRESHOLD) {
+            // Stable long enough — capture
+            state.running = false;
+            if (state.interval) clearInterval(state.interval);
+            setDetectPhase('ready');
+            playTraceAndCapture();
+          }
+        }
+      } catch {
+        // Snapshot failed — skip this cycle
+      }
+    }, 1500); // Check every 1.5s — very light on battery/CPU
+  }, []);
+
+  const stopStandDetection = () => {
+    standRef.current.running = false;
+    if (standRef.current.interval) {
+      clearInterval(standRef.current.interval);
+      standRef.current.interval = null;
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  };
+
+  useEffect(() => {
+    if (triggerMode === 'timer') {
+      startStandDetection();
+    } else {
+      stopStandDetection();
+    }
+    return () => stopStandDetection();
   }, [triggerMode]);
 
   useEffect(() => {
@@ -218,10 +278,12 @@ export default function AutoScanScreen() {
         addCapture(photo.uri);
 
         if (triggerMode === 'stillness') {
-          // After capture, restart motion detection — will capture again
-          // when it detects a new item placed and held still
+          // Handheld: restart accelerometer detection
           setTimeout(() => startMotionDetection(), 500);
-        } else if (triggerMode !== 'timer') {
+        } else if (triggerMode === 'timer') {
+          // On Stand: restart scene detection
+          setTimeout(() => startStandDetection(), 500);
+        } else {
           setTimeout(() => showNextItemPrompt(), 500);
         }
       }
@@ -266,6 +328,7 @@ export default function AutoScanScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
     if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
     stopMotionDetection();
+    stopStandDetection();
     endSession();
     router.replace('/auto-scan-review' as any);
   };
@@ -368,8 +431,11 @@ export default function AutoScanScreen() {
                 : detectPhase === 'ready' ? 'CAPTURING...'
                 : 'HANDHELD AUTO-SCAN'
               : triggerMode === 'timer'
-                ? detectPhase === 'ready' ? 'CAPTURING...'
-                : 'ON STAND · PLACE ITEM & WAIT'
+                ? detectPhase === 'waiting' ? 'WATCHING FOR SCENE CHANGE...'
+                : detectPhase === 'motion' ? 'CHANGE DETECTED'
+                : detectPhase === 'settling' ? 'HOLD STILL...'
+                : detectPhase === 'ready' ? 'CAPTURING...'
+                : 'ON STAND · PLACE ITEM'
                 : 'TAP VIEWFINDER TO CAPTURE'}
             </Text>
           </View>
