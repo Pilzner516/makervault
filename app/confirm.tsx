@@ -608,17 +608,35 @@ export default function ConfirmScreen() {
 
         {/* Action buttons */}
         <View style={{ marginTop: Spacing.lg }}>
+          {/* Primary: Save to Inventory — prominent, accent colored */}
           <PrimaryButton
-            label={isSavingSingle ? "SAVING..." : "Confirm & Save"}
-            icon="checkmark-circle-outline"
+            label={isSavingSingle ? "SAVING..." : "ADD TO INVENTORY"}
+            icon="add-circle-outline"
             disabled={isSavingSingle}
             onPress={() => handleConfirm(displayedResult)}
           />
+
+          {/* Where to Buy — does NOT save, just searches suppliers */}
+          <SecondaryButton
+            label="WHERE TO BUY (DON'T SAVE)"
+            icon="cart-outline"
+            onPress={() => {
+              const junk = ['n/a', 'generic', 'unknown', 'not specified', ''];
+              const clean = (s: string | null | undefined) => s && !junk.includes(s.toLowerCase().trim()) ? s.trim() : null;
+              const name = displayedResult.part_name.split(/[\s,]+/).slice(0, 6).join(' ');
+              const mpn = clean(displayedResult.mpn);
+              const mfg = clean(displayedResult.manufacturer);
+              const q = [name, mpn, mfg].filter(Boolean).join(' ');
+              router.push({ pathname: '/where-to-buy' as any, params: { itemName: q } });
+            }}
+          />
+
           <SecondaryButton
             label="Edit Manually"
             icon="pencil-outline"
             onPress={() => { logFeedback('edited', ''); router.back(); }}
           />
+
           <TouchableOpacity
             activeOpacity={0.75}
             style={{
@@ -628,7 +646,7 @@ export default function ConfirmScreen() {
             onPress={handleReject}
           >
             <Ionicons name="close" size={16} color={colors.statusOut} />
-            <Text style={{ fontSize: FontSize.sm, color: colors.statusOut }}>Not a Match</Text>
+            <Text numberOfLines={1} style={{ fontSize: FontSize.sm, color: colors.statusOut }}>Not a Match</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
