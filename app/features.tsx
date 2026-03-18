@@ -81,7 +81,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'search-outline',
         name: 'Smart Search',
-        description: 'Find any part instantly. Search across names, manufacturers, part numbers, categories, and notes. Results appear as you type.',
+        description: 'Find any part instantly. Search across names, manufacturers, part numbers, categories, and notes. Results appear as you type. Recent searches are saved and synced from the cloud.',
       },
       {
         icon: 'grid-outline',
@@ -101,7 +101,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'print-outline',
         name: 'Print QR Labels',
-        description: 'QR codes are sized for standard label printers. Print directly from the app or export for batch printing. Each code links to that location\'s inventory.',
+        description: 'Export QR codes as PNG images via the system Share sheet. Print directly, save to your photo library, or send to a label printer. Each code links to that location\'s inventory.',
       },
     ],
   },
@@ -151,6 +151,31 @@ const FEATURE_SECTIONS: FeatureSection[] = [
     ],
   },
   {
+    title: 'Data Management',
+    features: [
+      {
+        icon: 'download-outline',
+        name: 'Export as CSV',
+        description: 'Export your entire parts inventory as a CSV file with Name, Manufacturer, MPN, Category, Quantity, and Notes columns. Share via email, save to Files, or send to any app.',
+      },
+      {
+        icon: 'code-slash-outline',
+        name: 'Export as JSON',
+        description: 'Export your inventory in JSON format for developers, backup, or integration with other tools. Share directly from the app.',
+      },
+      {
+        icon: 'cloud-upload-outline',
+        name: 'Import from CSV',
+        description: 'Bulk-import parts from a CSV file. Pick a file, preview the parsed items, and import them all at once. Handles flexible column names and missing data gracefully.',
+      },
+      {
+        icon: 'copy-outline',
+        name: 'Duplicate Detection',
+        description: 'When scanning or saving a part that already exists in your inventory, MakerVault detects the duplicate and lets you merge quantities instead of creating a duplicate entry.',
+      },
+    ],
+  },
+  {
     title: 'Personalization',
     features: [
       {
@@ -161,12 +186,12 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'mic-outline',
         name: 'Voice Commands',
-        description: 'Search your inventory by voice. Ask "do I have any 10k resistors?" or "where are my servo motors?" and get an instant spoken answer.',
+        description: 'Search your inventory by voice. Ask "do I have any 10k resistors?" or "where are my servo motors?" and get an instant spoken answer. A dedicated overlay shows a pulsing mic, live transcript, and AI response.',
       },
       {
         icon: 'hand-left-outline',
         name: 'Haptic Feedback',
-        description: 'Feel a vibration on captures, button presses, and scan confirmations. Toggle on or off in Settings.',
+        description: 'Feel a vibration on captures, button presses, and scan confirmations. Respects your haptic feedback preference in Settings — toggle on or off globally.',
       },
       {
         icon: 'camera-reverse-outline',

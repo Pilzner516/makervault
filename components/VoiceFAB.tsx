@@ -1,4 +1,4 @@
-import { View, Text, Pressable, Modal, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, Pressable, Modal, TextInput, ScrollView } from 'react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Animated, {
   useSharedValue,
@@ -10,11 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-// expo-haptics is native-only — no-op on web
-const Haptics = Platform.OS !== 'web'
-  ? require('expo-haptics') as typeof import('expo-haptics')
-  : null;
 import { useRouter } from 'expo-router';
+import { hapticImpact, hapticNotification } from '@/lib/haptics';
 import { useTheme } from '@/context/ThemeContext';
 import { useVoiceStore } from '@/lib/zustand/voiceStore';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
@@ -126,7 +123,7 @@ export function VoiceFAB() {
         await speakResponse(response);
       }
 
-      Haptics?.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticNotification('Success');
     },
     [processTranscript, speakResponse, parts]
   );
@@ -195,7 +192,7 @@ export function VoiceFAB() {
   };
 
   const handlePress = async () => {
-    Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticImpact('Medium');
 
     if (state === 'listening') {
       await stopRecognition();
@@ -223,7 +220,7 @@ export function VoiceFAB() {
 
   const handleLongPressIn = () => {
     longPressTimer.current = setTimeout(() => {
-      Haptics?.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      hapticNotification('Warning');
       toggleAmbientMode();
     }, 1000);
   };

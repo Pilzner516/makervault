@@ -650,8 +650,9 @@ export function ScanResultCard({ name, confidence, suggestedLocation, onConfirm,
 interface FormProps {
   label: string; value: string; onChangeText: (t: string) => void;
   placeholder?: string; keyboardType?: 'default' | 'numeric' | 'decimal-pad'; rightLabel?: string;
+  secureTextEntry?: boolean; autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }
-export function FormField({ label, value, onChangeText, placeholder, keyboardType = 'default', rightLabel }: FormProps) {
+export function FormField({ label, value, onChangeText, placeholder, keyboardType = 'default', rightLabel, secureTextEntry, autoCapitalize }: FormProps) {
   const { colors } = useTheme();
   return (
     <View style={styles.formField}>
@@ -659,7 +660,8 @@ export function FormField({ label, value, onChangeText, placeholder, keyboardTyp
       <View style={[styles.formWrap, { backgroundColor: colors.bgDeep, borderColor: colors.borderDefault }]}>
         <TextInput style={[styles.formInput, { color: colors.textSecondary }]}
           value={value} onChangeText={onChangeText} placeholder={placeholder}
-          placeholderTextColor={colors.textDisabled} keyboardType={keyboardType} />
+          placeholderTextColor={colors.textDisabled} keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry} autoCapitalize={autoCapitalize} />
         {rightLabel && <Text style={[styles.formRight, { color: colors.textMuted }]}>{rightLabel.toUpperCase()}</Text>}
       </View>
     </View>

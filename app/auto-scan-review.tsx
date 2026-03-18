@@ -14,12 +14,13 @@ import {
 import { useTheme } from '@/context/ThemeContext';
 import { useAutoScanStore, AutoScanCapture } from '@/lib/zustand/autoScanStore';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
+import { supabase } from '@/lib/supabase';
 
 export default function AutoScanReviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { addPart } = useInventoryStore();
+  const { addPart, updatePart } = useInventoryStore();
   const {
     captures, updateCapture, confirmCapture, discardCapture,
     confirmAllAboveThreshold, confirmedCaptures, allReviewed, clearSession,
@@ -44,26 +45,40 @@ export default function AutoScanReviewScreen() {
     if (toSave.length === 0) return;
 
     setIsSaving(true);
-    let saved = 0;
+    let newCount = 0;
+    let mergedCount = 0;
 
     for (const cap of toSave) {
       if (!cap.result) continue;
       try {
-        await addPart({
-          name: cap.result.name,
-          manufacturer: cap.result.manufacturer,
-          mpn: cap.result.mpn,
-          category: cap.result.category,
-          subcategory: cap.result.subcategory,
-          description: null,
-          specs: cap.result.specs,
-          quantity: cap.quantity,
-          low_stock_threshold: 0,
-          image_url: cap.thumbnailUri,
-          datasheet_url: null,
-          notes: cap.location ? `Location: ${cap.location}` : null,
-        });
-        saved++;
+        // Check for existing part with same name (case-insensitive)
+        const { data: existing } = await supabase
+          .from('parts')
+          .select('id, name, quantity')
+          .ilike('name', cap.result.name);
+
+        if (existing && existing.length > 0) {
+          // Merge: increment quantity of existing part
+          const match = existing[0];
+          await updatePart(match.id, { quantity: match.quantity + (cap.quantity || 1) });
+          mergedCount++;
+        } else {
+          await addPart({
+            name: cap.result.name,
+            manufacturer: cap.result.manufacturer,
+            mpn: cap.result.mpn,
+            category: cap.result.category,
+            subcategory: cap.result.subcategory,
+            description: null,
+            specs: cap.result.specs,
+            quantity: cap.quantity,
+            low_stock_threshold: 0,
+            image_url: cap.thumbnailUri,
+            datasheet_url: null,
+            notes: cap.location ? `Location: ${cap.location}` : null,
+          });
+          newCount++;
+        }
       } catch {
         // Continue with others
       }
@@ -71,12 +86,18 @@ export default function AutoScanReviewScreen() {
 
     setIsSaving(false);
     clearSession();
+
+    const parts: string[] = [];
+    if (newCount > 0) parts.push(`${newCount} new`);
+    if (mergedCount > 0) parts.push(`${mergedCount} merged with existing`);
+    const total = newCount + mergedCount;
+
     Alert.alert(
       'SAVED',
-      `${saved} part${saved !== 1 ? 's' : ''} added to inventory.`,
+      `${total} part${total !== 1 ? 's' : ''} processed (${parts.join(', ')}).`,
       [{ text: 'OK', onPress: () => router.replace('/(tabs)/inventory') }]
     );
-  }, [confirmedCaptures, addPart, clearSession, router]);
+  }, [confirmedCaptures, addPart, updatePart, clearSession, router]);
 
   const handleBack = () => {
     const pending = captures.filter((c) => !c.confirmed && !c.discarded).length;

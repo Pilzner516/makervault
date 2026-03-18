@@ -7,10 +7,12 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { File as ExpoFile, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import {
   ScreenLayout, ScreenHeader,
   EngravingLabel, PanelCard,
@@ -41,6 +43,8 @@ export default function LocationsScreen() {
 
   // QR modal
   const [showQR, setShowQR] = useState(false);
+  const qrSvgRef = useRef<{ toDataURL: (cb: (data: string) => void) => void } | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   const fetchLocations = useCallback(async () => {
     setIsLoading(true);
@@ -164,6 +168,38 @@ export default function LocationsScreen() {
     setEditDescription('');
     setEditParentId(selectedLocation?.id ?? null);
     setShowEditModal(true);
+  };
+
+  const handleShareQR = async () => {
+    if (!qrSvgRef.current || !selectedLocation) return;
+    setIsSharing(true);
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert('Sharing not available', 'Sharing is not supported on this device.');
+        setIsSharing(false);
+        return;
+      }
+      qrSvgRef.current.toDataURL(async (base64: string) => {
+        try {
+          const filename = `QR-${selectedLocation.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+          const file = new ExpoFile(Paths.cache, filename);
+          file.write(base64, { encoding: 'base64' });
+          const fileUri = file.uri;
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'image/png',
+            dialogTitle: `QR Code — ${selectedLocation.name}`,
+          });
+        } catch {
+          Alert.alert('Export failed', 'Could not save the QR code image.');
+        } finally {
+          setIsSharing(false);
+        }
+      });
+    } catch {
+      Alert.alert('Export failed', 'Could not generate the QR code image.');
+      setIsSharing(false);
+    }
   };
 
   return (
@@ -335,13 +371,58 @@ export default function LocationsScreen() {
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}
           onPress={() => setShowQR(false)}
         >
-          {selectedLocation && (
-            <QRCodeLabel
-              locationId={selectedLocation.id}
-              locationName={selectedLocation.name}
-              size={200}
-            />
-          )}
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            {selectedLocation && (
+              <View style={{ alignItems: 'center', gap: 16 }}>
+                <QRCodeLabel
+                  locationId={selectedLocation.id}
+                  locationName={selectedLocation.name}
+                  size={220}
+                  getRef={(ref) => { qrSvgRef.current = ref as typeof qrSvgRef.current; }}
+                />
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    backgroundColor: colors.accentBg,
+                    borderWidth: 1,
+                    borderColor: colors.accentBorder,
+                    borderRadius: Radius.card,
+                    paddingVertical: 14,
+                    paddingHorizontal: 24,
+                    minHeight: 48,
+                    minWidth: 200,
+                    opacity: isSharing ? 0.5 : 1,
+                  }}
+                  onPress={handleShareQR}
+                  disabled={isSharing}
+                >
+                  <Ionicons name="share-outline" size={18} color={colors.accent} />
+                  <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.accent }}>
+                    {isSharing ? 'EXPORTING...' : 'PRINT / SHARE QR'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 24,
+                    minHeight: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => setShowQR(false)}
+                >
+                  <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textMuted }}>
+                    CLOSE
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </ScreenLayout>

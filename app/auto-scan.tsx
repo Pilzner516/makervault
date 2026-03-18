@@ -1,6 +1,6 @@
 import {
   View, Text, TouchableOpacity, ScrollView, ActivityIndicator,
-  StyleSheet, Platform, Animated, Alert,
+  StyleSheet, Animated, Alert,
 } from 'react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
@@ -12,10 +12,7 @@ import { ScreenLayout, EmptyState, ModeButton } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
 import { useAutoScanStore, TriggerMode } from '@/lib/zustand/autoScanStore';
 import { useSettingsStore } from '@/lib/zustand/settingsStore';
-
-const Haptics = Platform.OS !== 'web'
-  ? require('expo-haptics') as typeof import('expo-haptics')
-  : null;
+import { hapticImpact } from '@/lib/haptics';
 
 const TRIGGER_MODES: { key: TriggerMode; label: string }[] = [
   { key: 'manual', label: 'Manual' },
@@ -59,7 +56,7 @@ export default function AutoScanScreen() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (motionDetectTimer.current) clearTimeout(motionDetectTimer.current);
-      stopAutoLoop();
+      stopMotionDetection();
       endSession();
     };
   }, []);
@@ -152,16 +149,70 @@ export default function AutoScanScreen() {
   const traceBottomOp = useRef(new Animated.Value(0)).current;
   const traceLeftOp = useRef(new Animated.Value(0)).current;
 
-  // Both handheld and stand use the same auto-loop
-  const startMotionDetection = () => startAutoLoop();
-  const stopMotionDetection = () => stopAutoLoop();
+  // Handheld: try accelerometer, fall back to timer loop
+  const accelSub = useRef<{ remove: () => void } | null>(null);
+  const accelRunning = useRef(false);
+  const hadMotion = useRef(false);
+  const stillSince = useRef(0);
+  const accelCheckTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startMotionDetection = () => {
+    // Try accelerometer first
+    try {
+      const AccelMod = require('expo-sensors/build/Accelerometer');
+      const Accelerometer = AccelMod.default ?? AccelMod.Accelerometer ?? AccelMod;
+      if (!Accelerometer || typeof Accelerometer.setUpdateInterval !== 'function') throw new Error('no accel');
+
+      accelRunning.current = true;
+      hadMotion.current = false;
+      stillSince.current = 0;
+      setDetectPhase('waiting');
+      let lastMag = 0;
+
+      Accelerometer.setUpdateInterval(100);
+      accelSub.current = Accelerometer.addListener(({ x, y, z }: { x: number; y: number; z: number }) => {
+        if (!accelRunning.current || isCapturingRef.current) return;
+        const mag = Math.sqrt(x * x + y * y + z * z);
+        const delta = Math.abs(mag - lastMag);
+        lastMag = mag;
+        if (delta > 0.4) {
+          hadMotion.current = true;
+          stillSince.current = 0;
+          setDetectPhase('motion');
+        }
+      });
+
+      // Periodically check if still enough to capture
+      accelCheckTimer.current = setInterval(() => {
+        if (!accelRunning.current || isCapturingRef.current || !hadMotion.current) return;
+        if (stillSince.current === 0) {
+          stillSince.current = Date.now();
+          setDetectPhase('settling');
+        } else if (Date.now() - stillSince.current > 800) {
+          stopMotionDetection();
+          setDetectPhase('ready');
+          scheduleNextCapture();
+        }
+      }, 200);
+    } catch {
+      // Accelerometer not available — use timer loop
+      startAutoLoop();
+    }
+  };
+
+  const stopMotionDetection = () => {
+    accelRunning.current = false;
+    if (accelSub.current) { accelSub.current.remove(); accelSub.current = null; }
+    if (accelCheckTimer.current) { clearInterval(accelCheckTimer.current); accelCheckTimer.current = null; }
+    stopAutoLoop();
+  };
 
   const doCapture = async () => {
     if (isCapturingRef.current || !cameraRef.current) return;
 
     isCapturingRef.current = true;
     setIsCapturing(true);
-    Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticImpact('Medium');
 
     const currentMode = useAutoScanStore.getState().triggerMode;
 
@@ -171,8 +222,11 @@ export default function AutoScanScreen() {
         flashViewfinder();
         addCapture(photo.uri);
 
-        if (currentMode === 'stillness' || currentMode === 'timer') {
-          // Auto modes: schedule next capture after a brief pause
+        if (currentMode === 'stillness') {
+          // Handheld: restart motion detection (accel or fallback timer)
+          setTimeout(() => startMotionDetection(), 300);
+        } else if (currentMode === 'timer') {
+          // On Stand: schedule next timed capture
           setTimeout(() => scheduleNextCapture(), 300);
         } else {
           // Manual mode
@@ -180,8 +234,8 @@ export default function AutoScanScreen() {
         }
       }
     } catch {
-      // Camera capture failed — try again
-      if (currentMode !== 'manual') setTimeout(() => scheduleNextCapture(), 1000);
+      if (currentMode === 'stillness') setTimeout(() => startMotionDetection(), 1000);
+      else if (currentMode !== 'manual') setTimeout(() => scheduleNextCapture(), 1000);
     } finally {
       isCapturingRef.current = false;
       setIsCapturing(false);

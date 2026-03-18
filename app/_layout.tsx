@@ -51,6 +51,8 @@ function AppLayout() {
         <Stack.Screen name="auto-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="auto-scan-review" options={{ headerShown: false }} />
         <Stack.Screen name="all-suppliers" options={{ title: 'All Suppliers', headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
+        <Stack.Screen name="auth" options={{ presentation: 'modal', title: 'Account', headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
+        <Stack.Screen name="import" options={{ presentation: 'modal', title: 'Import CSV', headerStyle: { backgroundColor: colors.bgBase }, headerTintColor: colors.textPrimary }} />
       </Stack>
       {/* VoiceFAB removed — voice is now a launcher card on Home */}
       <StatusBar style="light" />

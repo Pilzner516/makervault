@@ -4,6 +4,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,7 +35,7 @@ export default function ConfirmScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { addPart } = useInventoryStore();
+  const { addPart, updatePart } = useInventoryStore();
   const scanPreset = useSettingsStore((s) => s.getScanPreset());
 
   const [isAnalyzing, setIsAnalyzing] = useState(true);
@@ -112,7 +113,52 @@ export default function ConfirmScreen() {
     supabase.from('identification_feedback').insert(feedback).then();
   };
 
-  const saveOnePart = async (identification: GeminiIdentification) => {
+  const saveOnePart = async (identification: GeminiIdentification): Promise<void> => {
+    // Check for existing part with same name (case-insensitive)
+    const { data: existing } = await supabase
+      .from('parts')
+      .select('id, name, quantity')
+      .ilike('name', identification.part_name);
+
+    if (existing && existing.length > 0) {
+      const match = existing[0];
+      return new Promise<void>((resolve, reject) => {
+        Alert.alert(
+          'Duplicate Found',
+          `"${match.name}" already exists with quantity ${match.quantity}. Add to existing or create new?`,
+          [
+            {
+              text: `Add to existing (qty: ${match.quantity} \u2192 ${match.quantity + 1})`,
+              onPress: async () => {
+                try {
+                  await updatePart(match.id, { quantity: match.quantity + 1 });
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              },
+            },
+            {
+              text: 'Add as new',
+              onPress: async () => {
+                try {
+                  await addNewPart(identification);
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              },
+            },
+            { text: 'Cancel', style: 'cancel', onPress: () => reject(new Error('Cancelled')) },
+          ]
+        );
+      });
+    }
+
+    await addNewPart(identification);
+  };
+
+  const addNewPart = async (identification: GeminiIdentification) => {
     const imageUrl: string | null = thumbnailUri;
     await addPart({
       name: identification.part_name,
@@ -143,6 +189,7 @@ export default function ConfirmScreen() {
       setSaved(true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
+      if (msg === 'Cancelled') return; // User cancelled duplicate dialog
       console.error('Save failed:', msg);
       setSaveError(msg);
     }

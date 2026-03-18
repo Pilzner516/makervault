@@ -1,9 +1,10 @@
-import { View, Text, ScrollView, TouchableOpacity, Switch, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, TextInput, Share, ActivityIndicator } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Alert } from 'react-native';
+import { File as ExpoFile, Paths } from 'expo-file-system';
 import {
   ScreenLayout, ScreenHeader,
   EngravingLabel, FieldRow, PanelCard,
@@ -16,6 +17,7 @@ import { useAuthStore } from '@/lib/zustand/authStore';
 import { useSettingsStore, SCAN_QUALITY_PRESETS } from '@/lib/zustand/settingsStore';
 import { useSupplierStore } from '@/lib/zustand/supplierStore';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -67,6 +69,71 @@ export default function SettingsScreen() {
     { code: 'AU', label: '🇦🇺 Australia' },
     { code: 'GLOBAL', label: '🌍 Global' },
   ];
+
+  const { parts, fetchParts } = useInventoryStore();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const exportAsCsv = async () => {
+    setIsExporting(true);
+    try {
+      await fetchParts();
+      const allParts = useInventoryStore.getState().parts;
+      const headers = ['Name', 'Manufacturer', 'MPN', 'Category', 'Quantity', 'Location', 'Notes'];
+      const rows = allParts.map((p) => [
+        `"${(p.name ?? '').replace(/"/g, '""')}"`,
+        `"${(p.manufacturer ?? '').replace(/"/g, '""')}"`,
+        `"${(p.mpn ?? '').replace(/"/g, '""')}"`,
+        `"${(p.category ?? '').replace(/"/g, '""')}"`,
+        String(p.quantity),
+        '""',
+        `"${(p.notes ?? '').replace(/"/g, '""')}"`,
+      ].join(','));
+      const csv = [headers.join(','), ...rows].join('\n');
+
+      try {
+        const file = new ExpoFile(Paths.cache, 'makervault_export.csv');
+        file.write(csv);
+        await Share.share({ url: file.uri, title: 'MakerVault Inventory Export' });
+      } catch {
+        // Fallback: share as text
+        await Share.share({ message: csv, title: 'MakerVault Inventory (CSV)' });
+      }
+    } catch (e) {
+      Alert.alert('Export Failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportAsJson = async () => {
+    setIsExporting(true);
+    try {
+      await fetchParts();
+      const allParts = useInventoryStore.getState().parts;
+      const exportData = allParts.map((p) => ({
+        name: p.name,
+        manufacturer: p.manufacturer,
+        mpn: p.mpn,
+        category: p.category,
+        quantity: p.quantity,
+        notes: p.notes,
+      }));
+      const json = JSON.stringify(exportData, null, 2);
+
+      try {
+        const file = new ExpoFile(Paths.cache, 'makervault_export.json');
+        file.write(json);
+        await Share.share({ url: file.uri, title: 'MakerVault Inventory Export' });
+      } catch {
+        // Fallback: share as text
+        await Share.share({ message: json, title: 'MakerVault Inventory (JSON)' });
+      }
+    } catch (e) {
+      Alert.alert('Export Failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure?', [
@@ -358,6 +425,59 @@ export default function SettingsScreen() {
             value={process.env.EXPO_PUBLIC_GEMINI_API_KEY ? 'Ready' : 'Not configured'}
             isLast
           />
+        </PanelCard>
+
+        {/* Data — Export / Import */}
+        <EngravingLabel label="Data" />
+        <PanelCard>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+              paddingHorizontal: Spacing.md, paddingVertical: 13, minHeight: 44,
+              borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
+            }}
+            onPress={exportAsCsv}
+            disabled={isExporting}
+          >
+            <Ionicons name="document-text-outline" size={18} color={colors.accent} />
+            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textSecondary }}>Export as CSV</Text>
+            {isExporting ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Ionicons name="share-outline" size={16} color={colors.textMuted} />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+              paddingHorizontal: Spacing.md, paddingVertical: 13, minHeight: 44,
+              borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
+            }}
+            onPress={exportAsJson}
+            disabled={isExporting}
+          >
+            <Ionicons name="code-slash-outline" size={18} color={colors.accent} />
+            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textSecondary }}>Export as JSON</Text>
+            {isExporting ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Ionicons name="share-outline" size={16} color={colors.textMuted} />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+              paddingHorizontal: Spacing.md, paddingVertical: 13, minHeight: 44,
+            }}
+            onPress={() => router.push('/import' as any)}
+          >
+            <Ionicons name="cloud-upload-outline" size={18} color={colors.accent} />
+            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textSecondary }}>Import from CSV</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
         </PanelCard>
       </ScrollView>
     </ScreenLayout>

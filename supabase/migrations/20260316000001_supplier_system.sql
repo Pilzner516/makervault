@@ -153,3 +153,5 @@ insert into suppliers (name, base_url, is_mv_preferred, countries, logo_bg, logo
    '#1D3557', '#FFFFFF', 'FRNL',
    'https://www.farnell.com/search?st={query}',
    'element14 UK brand', 'electronics', 31);
+-- Fix Jameco search URL
+-- Run manually: UPDATE suppliers SET url_template = 'https://www.jameco.com/c/search.html?q={query}' WHERE name = 'Jameco';

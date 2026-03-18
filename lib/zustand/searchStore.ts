@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { Part } from '@/lib/types';
 
 interface SearchStore {
@@ -7,9 +7,11 @@ interface SearchStore {
   results: Part[];
   isSearching: boolean;
   recentSearches: string[];
+  initialized: boolean;
   setQuery: (query: string) => void;
   search: (query: string) => Promise<void>;
   clearResults: () => void;
+  loadRecentSearches: () => Promise<void>;
 }
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -17,6 +19,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   results: [],
   isSearching: false,
   recentSearches: [],
+  initialized: false,
 
   setQuery: (query) => set({ query }),
 
@@ -38,7 +41,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
 
     if (error) throw error;
 
-    // Track search in history
+    // Track search in local history
     const recent = get().recentSearches.filter((s) => s !== query);
     recent.unshift(query);
 
@@ -56,4 +59,38 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   },
 
   clearResults: () => set({ results: [], query: '' }),
+
+  loadRecentSearches: async () => {
+    if (get().initialized) return;
+    if (!isSupabaseConfigured()) {
+      set({ initialized: true });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('search_history')
+        .select('query')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (!error && data) {
+        // Deduplicate while preserving order (most recent first)
+        const seen = new Set<string>();
+        const unique: string[] = [];
+        for (const row of data as Array<{ query: string }>) {
+          const q = row.query;
+          if (q && !seen.has(q)) {
+            seen.add(q);
+            unique.push(q);
+          }
+        }
+        set({ recentSearches: unique });
+      }
+    } catch {
+      // Non-critical — keep whatever local state we have
+    }
+
+    set({ initialized: true });
+  },
 }));

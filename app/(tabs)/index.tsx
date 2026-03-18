@@ -11,8 +11,8 @@ import { useTheme } from '@/context/ThemeContext';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { getLowStockParts } from '@/lib/notifications';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { isVoiceAvailable, startRecognition } from '@/lib/voice';
 import { useAutoScanStore } from '@/lib/zustand/autoScanStore';
+import { VoiceOverlay } from '@/components/VoiceOverlay';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -32,6 +32,7 @@ export default function HomeScreen() {
   const [totalProjects, setTotalProjects] = useState(0);
   const { loadUnconfirmed, hasUnconfirmed, captures: autoCaptures } = useAutoScanStore();
   const unconfirmedCount = autoCaptures.filter((c) => !c.confirmed && !c.discarded && (c.status === 'done' || c.status === 'processing')).length;
+  const [showVoice, setShowVoice] = useState(false);
 
   useEffect(() => {
     supabase
@@ -43,9 +44,7 @@ export default function HomeScreen() {
   }, []);
 
   const handleVoice = useCallback(() => {
-    if (isVoiceAvailable()) {
-      startRecognition();
-    }
+    setShowVoice(true);
   }, []);
 
   const cards: { icon: string; label: string; sub: string; route: string; highlight?: boolean }[] = [
@@ -128,6 +127,8 @@ export default function HomeScreen() {
           ))}
         </View>
       </ScrollView>
+
+      <VoiceOverlay visible={showVoice} onClose={() => setShowVoice(false)} />
     </ScreenLayout>
   );
 }

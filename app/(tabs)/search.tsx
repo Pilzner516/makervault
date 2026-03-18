@@ -9,6 +9,7 @@ import {
 } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
+import { useSearchStore } from '@/lib/zustand/searchStore';
 import { supabase } from '@/lib/supabase';
 import type { Part } from '@/lib/types';
 
@@ -39,6 +40,7 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { parts } = useInventoryStore();
+  const { recentSearches, loadRecentSearches } = useSearchStore();
   const [query, setQuery] = useState('');
   const [categories, setCategories] = useState<DbCategory[]>([]);
   const [loadingCats, setLoadingCats] = useState(true);
@@ -54,6 +56,11 @@ export default function SearchScreen() {
         setLoadingCats(false);
       });
   }, []);
+
+  // Load recent search history from Supabase
+  useEffect(() => {
+    loadRecentSearches();
+  }, [loadRecentSearches]);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -105,6 +112,34 @@ export default function SearchScreen() {
 
       {!isSearching ? (
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+          {/* Recent searches */}
+          {recentSearches.length > 0 && (
+            <>
+              <EngravingLabel label="Recent searches" />
+              <PanelCard>
+                {recentSearches.slice(0, 5).map((term, i) => (
+                  <TouchableOpacity
+                    key={`${term}-${i}`}
+                    activeOpacity={0.75}
+                    style={[
+                      s.recentRow,
+                      { backgroundColor: colors.bgDeep },
+                      i < Math.min(recentSearches.length, 5) - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.borderSubtle,
+                      },
+                    ]}
+                    onPress={() => setQuery(term)}
+                  >
+                    <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+                    <Text style={[s.recentText, { color: colors.textSecondary }]}>{term}</Text>
+                    <Ionicons name="arrow-forward-outline" size={14} color={colors.textDisabled} />
+                  </TouchableOpacity>
+                ))}
+              </PanelCard>
+            </>
+          )}
+
           <EngravingLabel label="Browse by category" />
 
           {loadingCats ? (
@@ -197,5 +232,18 @@ const s = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
     textAlign: 'center',
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+    minHeight: 44,
+  },
+  recentText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

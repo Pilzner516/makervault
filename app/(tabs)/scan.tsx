@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, Platform, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -10,10 +10,7 @@ import {
   ScreenLayout, ModeButton, EmptyState,
 } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
-
-const Haptics = Platform.OS !== 'web'
-  ? require('expo-haptics') as typeof import('expo-haptics')
-  : null;
+import { hapticImpact } from '@/lib/haptics';
 
 const isExpoGo = Constants.appOwnership === 'expo';
 
@@ -57,7 +54,7 @@ export default function ScanScreen() {
   const handleCapture = async () => {
     if (isCapturing) return;
     setIsCapturing(true);
-    Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticImpact('Medium');
 
     const bulk = mode === 'bulk' ? '1' : '0';
 
