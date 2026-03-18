@@ -76,11 +76,27 @@ export default function SearchScreen() {
     );
   }, [parts, query]);
 
+  // Map parent categories to likely part categories
+  const CAT_KEYWORDS: Record<string, string[]> = {
+    'electronics': ['resistor', 'capacitor', 'inductor', 'led', 'diode', 'transistor', 'ic', 'microcontroller', 'sensor', 'connector', 'switch', 'relay', 'crystal', 'fuse', 'display', 'module', 'cable', 'wire', 'board', 'arduino', 'raspberry', 'esp', 'power', 'voltage', 'charger', 'adapter', 'usb', 'hdmi', 'electronic'],
+    'fasteners': ['bolt', 'screw', 'nut', 'washer', 'rivet', 'standoff', 'anchor', 'clip', 'pin', 'insert', 'fastener'],
+    'tools': ['tool', 'hammer', 'wrench', 'screwdriver', 'plier', 'solder', 'multimeter', 'clamp', 'saw', 'drill', 'cutter', 'measure'],
+    '3d printing': ['filament', 'pla', 'petg', 'abs', 'resin', 'nozzle', 'hotend', 'printer', '3d print', 'bed', 'stepper'],
+    'materials': ['alumin', 'steel', 'wood', 'timber', 'acrylic', 'foam', 'adhesive', 'tape', 'sheet', 'stock', 'material', 'copper', 'pcb'],
+    'mechanical': ['bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'motor', 'coupling', 'actuator', 'servo', 'mechanical'],
+    'safety & ppe': ['safety', 'glove', 'goggle', 'mask', 'respirator', 'ear', 'protection', 'ppe'],
+  };
+
   const getCatCount = (catName: string) => {
     const lower = catName.toLowerCase();
-    return parts.filter(
-      (p) => p.category?.toLowerCase().includes(lower) || p.name.toLowerCase().includes(lower)
-    ).length;
+    const keywords = CAT_KEYWORDS[lower] ?? [lower];
+    return parts.filter((p) => {
+      const pCat = (p.category ?? '').toLowerCase();
+      const pName = p.name.toLowerCase();
+      const pSub = (p.subcategory ?? '').toLowerCase();
+      return keywords.some((kw) => pCat.includes(kw) || pName.includes(kw) || pSub.includes(kw)) ||
+        pCat.includes(lower);
+    }).length;
   };
 
   const isSearching = query.trim().length > 0;

@@ -108,10 +108,19 @@ export function VoiceOverlay({ visible, onClose }: VoiceOverlayProps) {
   const handleVoiceResult = useCallback(
     async (text: string) => {
       if (!text.trim()) return;
-      const parsed = await processTranscript(text);
-      const response = routeIntent(parsed.intent, parsed);
-      if (response) {
-        await speakResponse(response);
+      try {
+        const parsed = await processTranscript(text);
+        const response = routeIntent(parsed.intent, parsed);
+        if (response) {
+          await speakResponse(response);
+        } else {
+          // Fallback: if no intent matched, give a helpful response
+          await speakResponse(`I heard "${text}". Try asking about your inventory, like "how many resistors do I have?" or "what am I low on?"`);
+        }
+      } catch {
+        // Gemini failed — respond with a helpful message instead of hanging
+        setState('idle');
+        await speakResponse(`I couldn't process that. Try asking "what parts do I have?" or "what am I low on?"`);
       }
       hapticNotification('Success');
     },
@@ -162,11 +171,21 @@ export function VoiceOverlay({ visible, onClose }: VoiceOverlayProps) {
         return 'Let me show you some project ideas.';
       case 'reorder_part':
         return `Check the part detail screen to reorder ${partName ?? 'parts'}.`;
-      default:
+      case 'unknown':
+      default: {
+        // Handle common help/meta questions locally without Gemini
+        const lower = (parsed.entities.part_name ?? '').toLowerCase() + ' ' + (transcript ?? '').toLowerCase();
+        if (lower.includes('what can you do') || lower.includes('help') || lower.includes('commands')) {
+          return `I can search your inventory, check quantities, find low stock items, open the scanner, and look up project ideas. Try "how many resistors do I have?" or "what am I low on?"`;
+        }
+        if (lower.includes('how many') && lower.includes('total')) {
+          return `You have ${parts.length} items in your inventory.`;
+        }
         if (parsed.clarification_needed && parsed.clarification_question) {
           return parsed.clarification_question;
         }
         return null;
+      }
     }
   };
 
