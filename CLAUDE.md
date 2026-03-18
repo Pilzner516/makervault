@@ -147,6 +147,17 @@ Signature details: PanelBevelTop/Bottom (machined metal edge), PanelRivets (scre
 
 Font size minimum: 14px across all screens. Touch target minimum: 44px.
 
+## Features Page (MANDATORY UPDATE)
+The file `app/features.tsx` contains a user-facing list of ALL app features. The `FEATURE_SECTIONS` array at the top of the file defines every feature grouped by category.
+
+**RULE: When any agent adds, modifies, or removes a feature, they MUST update `app/features.tsx` to reflect the change.** This includes:
+- Adding a new feature entry when building something new
+- Updating a feature description when behavior changes
+- Removing a feature entry if functionality is removed
+- Keeping the version number current
+
+The Features screen is accessible from Settings (top of the page, "ALL FEATURES" button). It should always be an accurate, complete description of what MakerVault can do.
+
 ## Scan Quality Presets
 4 levels configured in settingsStore, all using Gemini 2.5 Flash:
 - **Fast**: 512px, 60% JPEG, basic prompt (~1.5s, ~65%)

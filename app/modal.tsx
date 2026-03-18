@@ -89,8 +89,29 @@ export default function SettingsScreen() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
 
-        {/* Features */}
-        <EngravingLabel label="Features" />
+        {/* What MakerVault Can Do */}
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            marginHorizontal: 12, marginTop: 8, marginBottom: 8,
+            paddingHorizontal: 14, paddingVertical: 14,
+            backgroundColor: colors.accentBg, borderRadius: 4, borderWidth: 1, borderColor: colors.accentBorder,
+          }}
+          onPress={() => router.push('/features' as any)}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="sparkles" size={20} color={colors.accent} />
+            <View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.accent }}>ALL FEATURES</Text>
+              <Text style={{ fontSize: 14, color: colors.textMuted }}>See everything MakerVault can do</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+        </TouchableOpacity>
+
+        {/* Feature Toggles */}
+        <EngravingLabel label="Feature Toggles" />
         <PanelCard>
           <ToggleRow
             icon="notifications-outline"
