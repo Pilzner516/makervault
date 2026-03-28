@@ -60,6 +60,8 @@ makervault/
 │   ├── locations.tsx          # Storage location management
 │   ├── reorder.tsx            # Price comparison
 │   ├── wishlist.tsx           # Wishlist screen
+│   ├── qr-labels.tsx          # QR label generator/export (3 sizes, Phomemo D30)
+│   ├── find-item.tsx          # "Find Item in Cabinet" AR camera
 │   └── project/[id].tsx       # Project detail
 ├── components/
 │   ├── UIKit.tsx              # Full component library (Level 3 Machined Metal)
@@ -69,14 +71,14 @@ makervault/
 │   ├── AddPartSheet.tsx       # Manual part add bottom sheet
 │   ├── LocationTree.tsx       # Hierarchical location picker
 │   ├── PartCard.tsx           # Part card component
-│   ├── QRCodeLabel.tsx        # QR code label generator
+│   ├── QRCodeLabel.tsx        # Universal QR label (location/category/part, 3 sizes, MV:{id} format)
 │   ├── QuantityAdjuster.tsx   # +/- quantity control
 │   └── ui/                    # Base UI primitives (collapsible, icon-symbol)
 ├── context/
 │   └── ThemeContext.tsx        # Theme provider + useTheme hook (10 themes, AsyncStorage)
 ├── constants/
 │   ├── themes.ts              # 10 theme definitions (zero orange/amber)
-│   └── theme.ts               # Legacy theme constants
+│   └── theme.ts               # Legacy theme constants + ELECTRIC_BLUE brand color
 ├── lib/
 │   ├── gemini.ts              # Gemini 2.5 Flash: identifyPart, identifyBulkParts, generateJSON
 │   ├── image.ts               # preprocessImage, createThumbnailDataUri, simpleHash
@@ -112,7 +114,8 @@ makervault/
 │   │   ├── 001_initial_schema.sql          # Parts, locations, suppliers, projects tables
 │   │   ├── 002_rls_policies.sql            # Row-level security policies
 │   │   ├── 20260316000000_category_system.sql  # categories + subcategories tables + seed data
-│   │   └── 20260316000001_supplier_system.sql  # Supplier metadata, user prefs, user settings + 15 suppliers
+│   │   ├── 20260316000001_supplier_system.sql  # Supplier metadata, user prefs, user settings + 15 suppliers
+│   │   └── 20260319000000_add_robotics_category.sql  # Robotics category + 24 subcategories
 │   └── functions/
 │       └── refresh-prices/index.ts
 ├── assets/
@@ -175,14 +178,15 @@ The Features screen is accessible from Settings (top of the page, "ALL FEATURES"
 Features: user favourites (max 4), country filtering (US/UK/CA/AU/Global), affiliate codes (Amazon Associates, AvantLink, Impact), URL templates with search query substitution.
 
 ## Category System
-7 default categories with subcategories (seeded via migration):
-- **Electronics**: Microcontrollers, Resistors, Capacitors, Switches, LEDs, Displays, Sensors, Power supply, Connectors, Modules
-- **Fasteners**: Bolts & screws, Nuts, Washers, Standoffs, Rivets, Anchors
-- **Tools**: Hand tools, Power tools, Measuring, Soldering, Cutting, Clamps & vises
-- **3D Printing**: Filament PLA/PETG/ABS, Resin, Bed adhesive, Nozzles, Print beds
-- **Materials**: Aluminium stock, Steel stock, Timber, Acrylic, Foam, Adhesives, Consumables
-- **Mechanical**: Bearings, Belts & pulleys, Springs, Gears, Linear rails, Motors, Couplings
-- **Safety & PPE**: Eye protection, Gloves, Ear protection, Masks & respirators
+8 categories with color-coded badges (seeded via migration, colors in `lib/categoryColors.ts`):
+- **Electronics** (#00c8e8): Microcontrollers, Resistors, Capacitors, Switches, LEDs, Displays, Sensors, Power supply, Connectors, Modules
+- **Robotics** (#e879f9): Robot Kits, Servo Motors, Stepper Motors, DC Motors, Motor Drivers, ESCs, Wheels & Tires, Chassis & Frames, Robotic Arms, Grippers, Actuators, Lidar, Drone Parts, Flight Controllers, etc.
+- **Fasteners** (#38bdf8): Bolts & screws, Nuts, Washers, Standoffs, Rivets, Anchors
+- **Tools** (#32d47a): Hand tools, Power tools, Measuring, Soldering, Cutting, Clamps & vises
+- **3D Printing** (#a78bfa): Filament PLA/PETG/ABS, Resin, Bed adhesive, Nozzles, Print beds
+- **Materials** (#f05032): Aluminium stock, Steel stock, Timber, Acrylic, Foam, Adhesives, Consumables
+- **Mechanical** (#60a5fa): Bearings, Belts & pulleys, Springs, Gears, Linear rails, Motors, Couplings
+- **Safety & PPE** (#94a3b8): Eye protection, Gloves, Ear protection, Masks & respirators
 
 ## Environment Variables
 Store in `.env.local` (never commit):

@@ -30,6 +30,7 @@ export default function HomeScreen() {
   const totalParts = parts.length;
   const lowStockCount = lowStockParts.length;
   const [totalProjects, setTotalProjects] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
   const { loadUnconfirmed, hasUnconfirmed, captures: autoCaptures } = useAutoScanStore();
   const unconfirmedCount = autoCaptures.filter((c) => !c.confirmed && !c.discarded && (c.status === 'done' || c.status === 'processing')).length;
   const [showVoice, setShowVoice] = useState(false);
@@ -39,6 +40,20 @@ export default function HomeScreen() {
       .from('projects')
       .select('id', { count: 'exact', head: true })
       .then(({ count }) => { if (count != null) setTotalProjects(count); });
+    // Fetch wishlist count
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { count } = await supabase
+          .from('wishlist')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        if (count != null) setWishlistCount(count);
+      } catch {
+        // Wishlist table may not exist yet
+      }
+    })();
     // Check for unconfirmed scans from previous session
     loadUnconfirmed();
   }, []);
@@ -52,6 +67,7 @@ export default function HomeScreen() {
     { icon: 'search-outline', label: 'SEARCH', sub: 'Find parts', route: '/(tabs)/search' },
     { icon: 'cube-outline', label: 'INVENTORY', sub: `${totalParts} parts`, route: '/(tabs)/inventory' },
     { icon: 'construct-outline', label: 'PROJECTS', sub: `${totalProjects} builds`, route: '/(tabs)/projects' },
+    { icon: 'bookmark-outline', label: 'WISHLIST', sub: `${wishlistCount} items`, route: '/wishlist' },
     { icon: 'mic-outline', label: 'VOICE', sub: 'Hands-free', route: '__voice__' },
     { icon: 'settings-outline', label: 'SETTINGS', sub: 'Themes & more', route: '/modal' },
   ];

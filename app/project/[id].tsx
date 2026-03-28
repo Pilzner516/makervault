@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,8 +13,8 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   ScreenLayout, ScreenHeader,
   MetricRow, MetricTile,
-  EngravingLabel, FieldRow, PanelCard,
-  PrimaryButton, SecondaryButton,
+  EngravingLabel, PanelCard,
+  PrimaryButton,
   Badge, EmptyState,
   Spacing, FontSize, Radius,
 } from '@/components/UIKit';
@@ -26,6 +26,13 @@ import type { Project, ProjectPart, Part } from '@/lib/types';
 
 interface ProjectPartWithInventory extends ProjectPart {
   inventoryPart: Part | null;
+}
+
+/** A part requirement derived from the project description (curated projects). */
+interface PartRequirement {
+  name: string;
+  inventoryMatch: Part | null;
+  hasIt: boolean;
 }
 
 export default function ProjectDetailScreen() {
@@ -70,6 +77,47 @@ export default function ProjectDetailScreen() {
     })();
   }, [id, parts]);
 
+  // ── Derive part requirements from project description ─────────────────────
+  // Curated projects store a description that mentions part names. We also
+  // check project_parts from Supabase (populated by AI-generated saves).
+  // For curated projects that were saved with only title/description, we
+  // attempt to find a matching curated project and extract parts_needed.
+
+  const partRequirements = useMemo((): PartRequirement[] => {
+    if (projectParts.length > 0) {
+      // Use the linked project_parts from Supabase
+      return projectParts.map((pp) => ({
+        name: pp.inventoryPart?.name ?? `Part ${pp.part_id.slice(0, 8)}`,
+        inventoryMatch: pp.inventoryPart,
+        hasIt: pp.inventoryPart != null && pp.inventoryPart.quantity >= pp.quantity_needed,
+      }));
+    }
+
+    // No project_parts linked — try to infer from project description
+    // by matching known part names from inventory
+    if (!project?.description) return [];
+
+    // Simple heuristic: search for common part keywords in the description
+    const desc = project.description.toLowerCase();
+    const matched: PartRequirement[] = [];
+    const seen = new Set<string>();
+
+    for (const p of parts) {
+      const lower = p.name.toLowerCase();
+      if (desc.includes(lower) && !seen.has(lower)) {
+        seen.add(lower);
+        matched.push({ name: p.name, inventoryMatch: p, hasIt: p.quantity > 0 });
+      }
+    }
+
+    return matched;
+  }, [project, projectParts, parts]);
+
+  const ownedCount = partRequirements.filter((pr) => pr.hasIt).length;
+  const totalCount = partRequirements.length;
+  const missingParts = partRequirements.filter((pr) => !pr.hasIt);
+  const allPartsOwned = totalCount > 0 && ownedCount === totalCount;
+
   if (!project) {
     return (
       <ScreenLayout style={{ paddingTop: insets.top }}>
@@ -90,12 +138,6 @@ export default function ProjectDetailScreen() {
       </ScreenLayout>
     );
   }
-
-  const ownedCount = projectParts.filter(
-    (pp) => pp.inventoryPart && pp.inventoryPart.quantity >= pp.quantity_needed
-  ).length;
-  const totalCount = projectParts.length;
-  const allPartsOwned = totalCount > 0 && ownedCount === totalCount;
 
   const handleStartBuild = () => {
     Alert.alert(
@@ -175,7 +217,11 @@ export default function ProjectDetailScreen() {
         backLabel="Projects"
         onBack={() => router.back()}
         rightElement={
-          <TouchableOpacity onPress={handleDelete} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={handleDelete}
+            activeOpacity={0.7}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
             <Ionicons name="trash-outline" size={22} color={colors.statusOut} />
           </TouchableOpacity>
         }
@@ -188,7 +234,11 @@ export default function ProjectDetailScreen() {
         {/* Metrics */}
         <MetricRow>
           <MetricTile value={ownedCount} label="Owned" color={colors.statusOk} />
-          <MetricTile value={totalCount - ownedCount} label="Missing" color={totalCount - ownedCount > 0 ? colors.statusOut : colors.statusOk} />
+          <MetricTile
+            value={totalCount - ownedCount}
+            label="Missing"
+            color={totalCount - ownedCount > 0 ? colors.statusOut : colors.statusOk}
+          />
           <MetricTile value={project.estimated_hours ?? '\u2014'} label="Hours" />
         </MetricRow>
 
@@ -208,7 +258,10 @@ export default function ProjectDetailScreen() {
                 <Text style={{ fontSize: FontSize.sm, color: colors.textMuted }}>{project.estimated_hours}h</Text>
               </View>
             )}
-            <Badge variant={project.status === 'completed' ? 'ok' : project.status === 'in_progress' ? 'low' : 'out'} label={project.status.replace('_', ' ')} />
+            <Badge
+              variant={project.status === 'completed' ? 'ok' : project.status === 'in_progress' ? 'low' : 'out'}
+              label={project.status.replace('_', ' ')}
+            />
           </View>
 
           {/* Description */}
@@ -236,64 +289,91 @@ export default function ProjectDetailScreen() {
         {/* Parts checklist */}
         <EngravingLabel label="Parts checklist" />
         <View style={{ paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm }}>
-          <Text style={{ fontSize: FontSize.sm, color: colors.textFaint }}>{ownedCount}/{totalCount} owned</Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textFaint }}>
+            {ownedCount}/{totalCount} owned
+          </Text>
         </View>
 
-        {projectParts.length === 0 ? (
+        {partRequirements.length === 0 ? (
           <Text style={{ fontSize: FontSize.sm, color: colors.textFaint, paddingHorizontal: Spacing.md }}>
             No parts linked
           </Text>
         ) : (
           <PanelCard>
-            {projectParts.map((pp, i) => {
-              const hasEnough =
-                pp.inventoryPart != null &&
-                pp.inventoryPart.quantity >= pp.quantity_needed;
-              const partName = pp.inventoryPart?.name ?? `Part ${pp.part_id.slice(0, 8)}`;
-              const partMeta = `Need ${pp.quantity_needed} \u00B7 Have ${pp.inventoryPart?.quantity ?? 0}`;
-
-              return (
-                <View key={pp.id} style={{
+            {partRequirements.map((pr, i) => (
+              <View
+                key={`${pr.name}-${i}`}
+                style={{
                   flexDirection: 'row', alignItems: 'center',
                   paddingHorizontal: Spacing.md, paddingVertical: 13,
                   backgroundColor: colors.bgRow,
-                  ...(i < projectParts.length - 1
+                  ...(i < partRequirements.length - 1
                     ? { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }
                     : {}),
-                }}>
-                  <Ionicons
-                    name={hasEnough ? 'checkmark-circle' : 'cart-outline'}
-                    size={20}
-                    color={hasEnough ? colors.statusOk : colors.accent}
-                  />
-                  <View style={{ flex: 1, marginLeft: Spacing.md }}>
-                    <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textPrimary }}>{partName}</Text>
-                    <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 }}>{partMeta}</Text>
-                  </View>
-                  {!hasEnough && (
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      style={{
-                        backgroundColor: colors.accentBg, borderRadius: Radius.badge,
-                        paddingHorizontal: Spacing.md, paddingVertical: 6,
-                      }}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/reorder',
-                          params: {
-                            mpn: pp.inventoryPart?.mpn ?? '',
-                            name: pp.inventoryPart?.name ?? '',
-                          },
-                        })
-                      }
-                    >
-                      <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: colors.accent }}>Order</Text>
-                    </TouchableOpacity>
-                  )}
+                }}
+              >
+                <Ionicons
+                  name={pr.hasIt ? 'checkmark-circle' : 'close-circle-outline'}
+                  size={20}
+                  color={pr.hasIt ? colors.statusOk : colors.statusOut}
+                />
+                <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                  <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textPrimary }}>
+                    {pr.name}
+                  </Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 }}>
+                    {pr.hasIt
+                      ? `In stock \u00B7 ${pr.inventoryMatch?.quantity ?? 0} available`
+                      : 'Not in inventory'}
+                  </Text>
                 </View>
-              );
-            })}
+                {!pr.hasIt && (
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    style={{
+                      backgroundColor: colors.accentBg, borderRadius: Radius.badge,
+                      paddingHorizontal: Spacing.md, paddingVertical: 6,
+                      minHeight: 44, justifyContent: 'center',
+                    }}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/where-to-buy',
+                        params: { name: pr.name },
+                      })
+                    }
+                  >
+                    <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: colors.accent }}>Order</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
           </PanelCard>
+        )}
+
+        {/* Order Missing Parts button */}
+        {missingParts.length > 0 && (
+          <View style={{ marginTop: Spacing.lg }}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                backgroundColor: colors.statusOutBg, borderWidth: 0.5, borderColor: colors.statusOutBorder,
+                borderRadius: Radius.icon, paddingVertical: 14, marginHorizontal: Spacing.md, gap: 8,
+                minHeight: 48,
+              }}
+              onPress={() =>
+                router.push({
+                  pathname: '/where-to-buy',
+                  params: { name: missingParts[0].name },
+                })
+              }
+            >
+              <Ionicons name="cart-outline" size={20} color={colors.statusOut} />
+              <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.statusOut }}>
+                Order Missing Parts ({missingParts.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Action buttons */}
@@ -313,6 +393,7 @@ export default function ProjectDetailScreen() {
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
                 backgroundColor: colors.statusOkBg, borderWidth: 0.5, borderColor: colors.statusOkBorder,
                 borderRadius: Radius.icon, paddingVertical: 14, marginHorizontal: Spacing.md, gap: 8,
+                minHeight: 48,
               }}
               onPress={handleComplete}
             >

@@ -70,7 +70,9 @@ export default function AutoScanReviewScreen() {
             category: cap.result.category,
             subcategory: cap.result.subcategory,
             description: null,
-            specs: cap.result.specs,
+            specs: cap.result.estimated_price
+              ? { ...(cap.result.specs || {}), estimated_price: cap.result.estimated_price }
+              : cap.result.specs,
             quantity: cap.quantity,
             low_stock_threshold: 0,
             image_url: cap.thumbnailUri,

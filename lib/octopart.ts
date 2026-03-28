@@ -1,5 +1,13 @@
-const OCTOPART_API_KEY = process.env.OCTOPART_API_KEY ?? '';
+const OCTOPART_API_KEY = process.env.EXPO_PUBLIC_OCTOPART_API_KEY ?? '';
 const OCTOPART_ENDPOINT = 'https://octopart.com/api/v4/endpoint';
+
+/**
+ * Returns true if the Octopart API key is configured and available.
+ * Use this to conditionally show/hide Octopart-dependent UI.
+ */
+export function isOctopartAvailable(): boolean {
+  return OCTOPART_API_KEY.length > 0;
+}
 
 export interface OctopartResult {
   name: string;
@@ -95,25 +103,36 @@ function mapResult(raw: RawPart): OctopartResult {
 }
 
 export async function searchOctopart(query: string): Promise<OctopartResult[]> {
-  const response = await fetch(OCTOPART_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${OCTOPART_API_KEY}`,
-    },
-    body: JSON.stringify({ query: SEARCH_QUERY, variables: { q: query } }),
-  });
+  if (!isOctopartAvailable()) return [];
+  try {
+    const response = await fetch(OCTOPART_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OCTOPART_API_KEY}`,
+      },
+      body: JSON.stringify({ query: SEARCH_QUERY, variables: { q: query } }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Octopart API error: ${response.status}`);
+    if (!response.ok) {
+      console.warn(`Octopart API error: ${response.status}`);
+      return [];
+    }
+
+    const json = await response.json();
+    const results = json?.data?.search?.results ?? [];
+    return results.map((r: { part: RawPart }) => mapResult(r.part));
+  } catch (e) {
+    console.warn('Octopart fetch failed:', e);
+    return [];
   }
-
-  const json = await response.json();
-  const results = json?.data?.search?.results ?? [];
-  return results.map((r: { part: RawPart }) => mapResult(r.part));
 }
 
 export async function getPartByMPN(mpn: string): Promise<OctopartResult | null> {
-  const results = await searchOctopart(mpn);
-  return results.find((r) => r.mpn.toLowerCase() === mpn.toLowerCase()) ?? results[0] ?? null;
+  try {
+    const results = await searchOctopart(mpn);
+    return results.find((r) => r.mpn.toLowerCase() === mpn.toLowerCase()) ?? results[0] ?? null;
+  } catch {
+    return null;
+  }
 }

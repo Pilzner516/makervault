@@ -185,7 +185,7 @@ export default function SettingsScreen() {
           <ToggleRow
             icon="notifications-outline"
             label="Low Stock Alerts"
-            description="Show alerts when items drop below threshold"
+            description="Daily reminders for items below threshold"
             value={lowStockAlertsEnabled}
             onValueChange={setLowStockAlerts}
           />

@@ -116,6 +116,7 @@ export interface GeminiIdentification {
   specs: Record<string, string>;
   markings_detected: string[];
   confidence: number;
+  estimated_price: string;
   alternatives: Array<{
     part_name: string;
     mpn: string;

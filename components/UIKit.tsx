@@ -43,6 +43,7 @@ function SafeGradient(props: { colors: string[]; start?: any; end?: any; style?:
 }
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
+import { ELECTRIC_BLUE } from '@/constants/theme';
 
 export { useTheme } from '@/context/ThemeContext';
 export const Spacing  = { xs: 4, sm: 8, md: 10, lg: 14, xl: 20 };
@@ -187,12 +188,12 @@ export function LogoHeader({ subtitle = 'Workshop OS', rightElement }: LogoHeade
       <View style={[styles.headerContent, { paddingBottom: 0 }]}>
         <View style={styles.logoRow}>
           <View style={[styles.logoBox, { backgroundColor: colors.bgScreen, borderColor: colors.borderDefault }]}>
-            <LogoMark color={colors.accent} />
+            <LogoMark color={ELECTRIC_BLUE} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.logoName}>
               <Text style={{ color: colors.textPrimary }}>Maker</Text>
-              <Text style={{ color: colors.accent }}>Vault</Text>
+              <Text style={{ color: ELECTRIC_BLUE }}>Vault</Text>
             </Text>
             <Text style={[styles.logoSub, { color: colors.textFaint }]}>{subtitle.toUpperCase()}</Text>
           </View>
@@ -301,7 +302,7 @@ export function ItemRow({ iconLabel, iconColor, imageUri, name, meta, badge, bad
         { borderLeftWidth: 2, borderLeftColor: barColor }]}>
       {imageUri ? (
         <View style={[styles.iconBox, { backgroundColor: colors.bgSurface, borderColor: colors.borderMid, overflow: 'hidden' }]}>
-          <RNImage source={{ uri: imageUri }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+          <RNImage source={{ uri: imageUri }} style={{ width: 72, height: 72 }} resizeMode="cover" />
         </View>
       ) : (
         <View style={[styles.iconBox, { backgroundColor: colors.bgSurface, borderColor: colors.borderMid }]}>
@@ -778,10 +779,10 @@ const styles = StyleSheet.create({
   // Panel card
   panelCard: { borderRadius:4, borderWidth:1, marginHorizontal:12, marginBottom:8, overflow:'hidden', position:'relative' },
   // Item row — min 44px
-  itemRow: { flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:11, gap:10, minHeight:44 },
-  iconBox: { width:36, height:36, borderRadius:3, borderWidth:1, alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' },
+  itemRow: { flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:10, gap:10, minHeight:52 },
+  iconBox: { width:72, height:72, borderRadius:4, borderWidth:1, alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' },
   iconBoxShimmer: { position:'absolute', top:0, left:0, right:0, height:8 },
-  iconLabel: { fontSize:14, fontWeight:'800', letterSpacing:0.02, position:'relative' },
+  iconLabel: { fontSize:18, fontWeight:'800', letterSpacing:0.02, position:'relative' },
   itemInfo: { flex:1, gap:3 },
   itemName: { fontSize:17, fontWeight:'700' },
   itemMeta: { fontSize:14, letterSpacing:0.04 },

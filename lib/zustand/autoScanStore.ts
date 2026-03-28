@@ -21,6 +21,7 @@ export interface AutoScanCapture {
     specs: Record<string, string> | null;
     confidence: number;
     markings: string[];
+    estimated_price: string;
   } | null;
   quantity: number;
   location: string;
@@ -157,6 +158,7 @@ export const useAutoScanStore = create<AutoScanStore>((set, get) => ({
                   specs: result.specs || null,
                   confidence: result.confidence,
                   markings: result.markings_detected,
+                  estimated_price: result.estimated_price || '',
                 },
               }
             : c

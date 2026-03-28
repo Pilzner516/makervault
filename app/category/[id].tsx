@@ -72,6 +72,7 @@ export default function CategoryScreen() {
     '3d printing': ['3d print', 'filament', 'pla', 'petg', 'abs', 'tpu', 'resin', 'nozzle', 'hotend', 'extruder', 'bed', 'build plate', 'stepper', 'ender', 'prusa', 'bambu', 'creality'],
     'materials': ['material', 'alumin', 'steel', 'wood', 'timber', 'acrylic', 'foam', 'adhesive', 'epoxy', 'tape', 'sheet', 'stock', 'copper', 'pcb', 'brass', 'plastic', 'rubber', 'silicone', 'paint', 'primer', 'sealant', 'lubricant'],
     'mechanical': ['mechanical', 'bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'linear', 'motor', 'coupling', 'actuator', 'servo', 'shaft', 'rod', 'bushing', 'cam', 'chain', 'sprocket', 'valve', 'gasket', 'o-ring'],
+    'robotics': ['robot', 'servo', 'stepper', 'dc motor', 'motor driver', 'motor controller', 'esc', 'wheel', 'tire', 'chassis', 'frame', 'robotic arm', 'gripper', 'actuator', 'lidar', 'ultrasonic', 'ir sensor', 'line follower', 'drone', 'propeller', 'flight controller', 'gimbal', 'fpv', 'rc receiver', 'rc transmitter', 'quadcopter', 'hexapod', 'bipedal', 'omni wheel', 'mecanum', 'encoder', 'pid', 'imu', 'gyroscope', 'accelerometer', 'robot kit', 'robot platform'],
     'safety & ppe': ['safety', 'glove', 'goggle', 'glasses', 'mask', 'respirator', 'ear', 'protection', 'ppe', 'first aid', 'fire', 'extinguisher', 'apron'],
   };
 
@@ -132,9 +133,17 @@ export default function CategoryScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenHeader
         title={category.name}
-        subtitle={`${categoryPartCount} parts · ${subcategories.length} subcategories`}
+        subtitle={`${categoryPartCount} parts \u00b7 ${subcategories.length} subcategories`}
         backLabel="Search"
         onBack={() => router.back()}
+        rightElement={
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/qr-labels' as any, params: { type: 'category', id: category.id, title: category.name } })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="qr-code-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
+        }
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>

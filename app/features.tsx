@@ -60,8 +60,8 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       },
       {
         icon: 'camera-outline',
-        name: 'Part Photos',
-        description: 'Every scanned part keeps a quality photo from your camera. See thumbnails in the inventory list and full images in part detail.',
+        name: 'Part Photos & Product Images',
+        description: 'Every scanned part keeps your camera photo plus a clean product image from suppliers. See both side by side on the part detail screen. Tap to re-scan if the product image is wrong.',
       },
       {
         icon: 'notifications-outline',
@@ -71,7 +71,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'bookmark-outline',
         name: 'Wishlist',
-        description: 'Keep a running list of parts you need to order. Group by supplier for efficient purchasing.',
+        description: 'Bookmark any part to add it to your wishlist. Add from part detail or the Price Check screen. View all wishlist items from the Home screen, grouped by supplier for efficient purchasing.',
       },
     ],
   },
@@ -86,7 +86,7 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'grid-outline',
         name: 'Category Browser',
-        description: 'Browse 7 built-in categories (Electronics, Fasteners, Tools, 3D Printing, Materials, Mechanical, Safety & PPE) with 50+ subcategories. Tap to drill down.',
+        description: 'Browse 8 built-in categories (Electronics, Robotics, Fasteners, Tools, 3D Printing, Materials, Mechanical, Safety & PPE) with 70+ subcategories. Tap to drill down.',
       },
       {
         icon: 'file-tray-stacked-outline',
@@ -96,12 +96,22 @@ const FEATURE_SECTIONS: FeatureSection[] = [
       {
         icon: 'qr-code-outline',
         name: 'QR Code Labels',
-        description: 'Generate a unique QR code for each storage location. Print labels and stick them on bins and drawers. Scan any label to instantly see what\'s inside.',
+        description: 'Generate QR codes for parts, categories, and storage locations. Three sizes: Small (Phomemo D30 12mm labels), Medium (standard drawer labels), and Large (full detail). Simplified MV: format for the smallest possible QR codes.',
       },
       {
         icon: 'print-outline',
-        name: 'Print QR Labels',
-        description: 'Export QR codes as PNG images via the system Share sheet. Print directly, save to your photo library, or send to a label printer. Each code links to that location\'s inventory.',
+        name: 'Print & Share Labels',
+        description: 'Export QR labels as PNG images. Share via the system share sheet, save to your photo library, or send directly to a Phomemo D30 label printer. Works with any label printer that accepts images.',
+      },
+      {
+        icon: 'scan-outline',
+        name: 'Find Item in Cabinet',
+        description: 'Lost a part? Tap "Find Item" on any part, then point your camera at a cabinet with QR-labeled drawers. The app highlights the exact drawer that contains your part in real-time.',
+      },
+      {
+        icon: 'barcode-outline',
+        name: 'Barcode Scanning',
+        description: 'Scan product barcodes (EAN, UPC, Code128) to identify parts instantly. AI looks up the product from the barcode number. Also scans multiple QR codes at once to find all labeled items.',
       },
     ],
   },
@@ -110,8 +120,8 @@ const FEATURE_SECTIONS: FeatureSection[] = [
     features: [
       {
         icon: 'cart-outline',
-        name: 'Where to Buy',
-        description: '15 suppliers built in — Amazon, DigiKey, Mouser, McMaster-Carr, Adafruit, SparkFun, and more. Tap "Where to Buy" on any part to search across all suppliers instantly.',
+        name: 'Price Check',
+        description: '15 suppliers built in — Amazon, DigiKey, Mouser, McMaster-Carr, Adafruit, SparkFun, and more. Tap "Price Check" on any part to compare prices across all suppliers. AI estimates prices at scan time.',
       },
       {
         icon: 'star-outline',
@@ -134,19 +144,34 @@ const FEATURE_SECTIONS: FeatureSection[] = [
     title: 'Projects',
     features: [
       {
+        icon: 'compass-outline',
+        name: 'Project Discovery',
+        description: 'Browse 27 curated maker projects across 9 categories — Robotics, Home Automation, Lighting, IoT, Audio, Wearables, Tools, Art & Decor. Filter by category and difficulty level.',
+      },
+      {
+        icon: 'git-compare-outline',
+        name: 'Parts Matching',
+        description: 'Every project shows how many required parts you already own with a match percentage and progress bar. "Matched to Your Parts" section surfaces projects you can start right away.',
+      },
+      {
+        icon: 'flash-outline',
+        name: 'Quick Builds',
+        description: 'Dedicated section for beginner-level projects under 2 hours. Perfect for a weekend afternoon or learning a new skill.',
+      },
+      {
+        icon: 'bookmark-outline',
+        name: 'Save & Track Projects',
+        description: 'Bookmark projects to save them for later. Saved projects sync to your account and appear in a dedicated section on the Projects screen.',
+      },
+      {
+        icon: 'cart-outline',
+        name: 'Order Missing Parts',
+        description: 'Project detail shows exactly which parts you are missing. Tap any missing part to search suppliers, or use the "Order Missing Parts" button to start shopping.',
+      },
+      {
         icon: 'construct-outline',
-        name: 'Project Tracking',
-        description: 'Create projects and track which parts you need vs. what you own. See at a glance which projects are ready to build and which need parts.',
-      },
-      {
-        icon: 'bulb-outline',
-        name: 'AI Project Ideas',
-        description: 'AI analyzes your inventory and suggests projects you can build right now — prioritizing ones where you already own most of the required parts.',
-      },
-      {
-        icon: 'open-outline',
-        name: 'Instructables Integration',
-        description: 'Browse real projects from Instructables matched to your parts. Tap to open the full build guide in your browser.',
+        name: 'Build Tracking',
+        description: 'Start a build to mark it in-progress. Complete it to deduct consumed parts from your inventory automatically.',
       },
     ],
   },

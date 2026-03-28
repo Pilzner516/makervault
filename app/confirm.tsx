@@ -18,8 +18,10 @@ import {
   Spacing, FontSize, Radius,
 } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
-import { identifyPart, identifyBulkParts } from '@/lib/gemini';
+import { ELECTRIC_BLUE } from '@/constants/theme';
+import { identifyPart, identifyBulkParts, generateJSON, fetchProductImageUrl } from '@/lib/gemini';
 import { preprocessImage, simpleHash, createThumbnailDataUri } from '@/lib/image';
+import { getCategoryColor } from '@/lib/categoryColors';
 import { supabase } from '@/lib/supabase';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { useSettingsStore } from '@/lib/zustand/settingsStore';
@@ -28,9 +30,11 @@ import type { GeminiIdentification, ConfirmationFeedback } from '@/lib/types';
 type BulkDecision = 'pending' | 'add' | 'skip';
 
 export default function ConfirmScreen() {
-  const { imageUri, bulkMode } = useLocalSearchParams<{
+  const { imageUri, bulkMode, barcodeData, barcodeType } = useLocalSearchParams<{
     imageUri: string;
     bulkMode: string;
+    barcodeData: string;
+    barcodeType: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -51,8 +55,53 @@ export default function ConfirmScreen() {
   const [imageHash, setImageHash] = useState('');
 
   const isBulk = bulkMode === '1';
+  const isBarcodeMode = !!barcodeData;
 
   useEffect(() => {
+    // Barcode-based identification — no image needed
+    if (barcodeData) {
+      (async () => {
+        try {
+          setImageHash(simpleHash(barcodeData));
+          const identification = await generateJSON<GeminiIdentification>(
+            `You are an expert maker/workshop inventory identifier.
+Identify this product by its barcode number: ${barcodeData} (type: ${barcodeType ?? 'unknown'}).
+
+CATEGORY RULES — assign one of: Electronics, Robotics, Fasteners, Tools, 3D Printing, Materials, Mechanical, Safety & PPE.
+
+Rules for part_name:
+- Write it like an Amazon product listing title
+- Start with WHAT IT IS, not model numbers
+- Include purpose, type, size/length, brand if known
+
+Return JSON:
+{
+  "part_name": string,
+  "manufacturer": string,
+  "mpn": string,
+  "category": string,
+  "subcategory": string,
+  "specs": object,
+  "markings_detected": string[],
+  "confidence": number,
+  "estimated_price": string,
+  "alternatives": [
+    { "part_name": string, "mpn": string, "confidence": number }
+  ]
+}
+
+If the barcode is not recognized, set part_name to your best guess and confidence below 0.3.`
+          );
+          setResult(identification);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to identify barcode');
+        } finally {
+          setIsAnalyzing(false);
+        }
+      })();
+      return;
+    }
+
     if (!imageUri) return;
 
     (async () => {
@@ -88,7 +137,7 @@ export default function ConfirmScreen() {
         setIsAnalyzing(false);
       }
     })();
-  }, [imageUri, isBulk]);
+  }, [imageUri, isBulk, barcodeData, barcodeType]);
 
   const displayedResult =
     altIndex >= 0 && result?.alternatives[altIndex]
@@ -160,6 +209,26 @@ export default function ConfirmScreen() {
 
   const addNewPart = async (identification: GeminiIdentification) => {
     const imageUrl: string | null = thumbnailUri;
+    const specs = { ...(identification.specs || {}) };
+    if (identification.estimated_price) {
+      specs.estimated_price = identification.estimated_price;
+    }
+
+    // Fetch product image URL in background (don't block save)
+    const productImagePromise = fetchProductImageUrl(
+      identification.part_name,
+      identification.mpn || null,
+    ).catch(() => '');
+
+    // Try to get the image before saving, but don't wait more than 3s
+    const productImg = await Promise.race([
+      productImagePromise,
+      new Promise<string>((r) => setTimeout(() => r(''), 3000)),
+    ]);
+    if (productImg) {
+      specs.product_image_url = productImg;
+    }
+
     await addPart({
       name: identification.part_name,
       manufacturer: identification.manufacturer || null,
@@ -167,7 +236,7 @@ export default function ConfirmScreen() {
       category: identification.category || null,
       subcategory: identification.subcategory || null,
       description: null,
-      specs: identification.specs || null,
+      specs: Object.keys(specs).length > 0 ? specs : null,
       quantity: 1,
       low_stock_threshold: 0,
       image_url: imageUrl,
@@ -278,16 +347,32 @@ export default function ConfirmScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <ScreenHeader title="Analyzing..." backLabel="Cancel" onBack={() => router.back()} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.lg }}>
-          {processedUri && (
+          {isBarcodeMode ? (
+            <View style={{
+              alignItems: 'center', justifyContent: 'center',
+              height: 180, width: 180, borderRadius: Radius.card, marginBottom: 20,
+              backgroundColor: colors.bgCard, borderWidth: 0.5, borderColor: colors.borderDefault,
+            }}>
+              <Ionicons name="barcode-outline" size={48} color={colors.accent} />
+              <Text style={{ fontSize: FontSize.sm, color: colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' }}>
+                {barcodeData}
+              </Text>
+              {barcodeType && (
+                <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: 2 }}>
+                  Type: {barcodeType}
+                </Text>
+              )}
+            </View>
+          ) : processedUri ? (
             <Image
               source={{ uri: processedUri }}
               style={{ height: 180, width: 180, borderRadius: Radius.card, marginBottom: 20 }}
               contentFit="cover"
             />
-          )}
+          ) : null}
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={{ fontSize: FontSize.md, color: colors.textMuted, marginTop: Spacing.lg }}>
-            {isBulk ? 'Identifying all parts...' : 'Identifying component...'}
+            {isBarcodeMode ? 'Looking up barcode...' : isBulk ? 'Identifying all parts...' : 'Identifying component...'}
           </Text>
         </View>
       </ScreenLayout>
@@ -388,9 +473,22 @@ export default function ConfirmScreen() {
 
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: FontSize.sm, fontWeight: '500', color: colors.textSecondary }}>{item.part_name}</Text>
-                    <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 }}>
-                      {[item.manufacturer, item.category].filter((s) => s && s.toLowerCase() !== 'n/a').join(' \u00B7 ') || item.category || ''}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
+                      {item.category && (() => {
+                        const cc = getCategoryColor(item.category);
+                        return (
+                          <View style={{ backgroundColor: cc + '18', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 0.5, borderColor: cc + '40' }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: cc }}>{item.category}</Text>
+                          </View>
+                        );
+                      })()}
+                      {item.manufacturer && item.manufacturer.toLowerCase() !== 'n/a' && (
+                        <Text style={{ fontSize: FontSize.xs, color: colors.textMuted }}>{item.manufacturer}</Text>
+                      )}
+                      {item.estimated_price ? (
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.statusOk }}>{item.estimated_price}</Text>
+                      ) : null}
+                    </View>
                     {item.specs && Object.keys(item.specs).length > 0 && (
                       <Text style={{ fontSize: FontSize.xs, color: colors.textFaint, marginTop: 3 }} numberOfLines={1}>
                         {Object.entries(item.specs).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' \u00B7 ')}
@@ -503,14 +601,30 @@ export default function ConfirmScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
-        {/* Photo */}
-        {processedUri && (
+        {/* Photo or Barcode info */}
+        {isBarcodeMode ? (
+          <View style={{
+            height: 120, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: colors.bgCard, borderBottomWidth: 0.5, borderBottomColor: colors.borderDefault,
+            gap: 6,
+          }}>
+            <Ionicons name="barcode-outline" size={36} color={colors.accent} />
+            <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textPrimary }}>
+              {barcodeData}
+            </Text>
+            {barcodeType && (
+              <Text style={{ fontSize: FontSize.xs, color: colors.textFaint }}>
+                {barcodeType.toUpperCase()}
+              </Text>
+            )}
+          </View>
+        ) : processedUri ? (
           <Image
             source={{ uri: processedUri }}
             style={{ height: 200, width: '100%', backgroundColor: colors.bgCard }}
             contentFit="cover"
           />
-        )}
+        ) : null}
 
         {/* AI match card */}
         <View style={{
@@ -536,17 +650,44 @@ export default function ConfirmScreen() {
             <ConfidenceBadge confidence={displayedResult.confidence} />
           </View>
 
-          {displayedResult.category && (
-            <View style={{
-              marginTop: Spacing.sm, alignSelf: 'flex-start',
-              backgroundColor: colors.accentBg, borderRadius: Radius.badge,
-              paddingHorizontal: 6, paddingVertical: 2,
-            }}>
-              <Text style={{ fontSize: FontSize.xs, fontWeight: '500', color: colors.accent }}>
-                {displayedResult.category}
-              </Text>
-            </View>
-          )}
+          {/* Category + Price row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm, gap: 6, flexWrap: 'wrap' }}>
+            {displayedResult.category && (() => {
+              const catColor = getCategoryColor(displayedResult.category);
+              return (
+                <View style={{
+                  backgroundColor: catColor + '18', borderRadius: Radius.badge,
+                  borderWidth: 0.5, borderColor: catColor + '40',
+                  paddingHorizontal: 8, paddingVertical: 3,
+                }}>
+                  <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: catColor }}>
+                    {displayedResult.category}{displayedResult.subcategory ? ` · ${displayedResult.subcategory}` : ''}
+                  </Text>
+                </View>
+              );
+            })()}
+            {displayedResult.estimated_price ? (
+              <View style={{
+                backgroundColor: colors.statusOkBg, borderRadius: Radius.badge,
+                borderWidth: 0.5, borderColor: colors.statusOkBorder,
+                paddingHorizontal: 8, paddingVertical: 3,
+              }}>
+                <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: colors.statusOk }}>
+                  {displayedResult.estimated_price}
+                </Text>
+              </View>
+            ) : (
+              <View style={{
+                backgroundColor: colors.bgSurface, borderRadius: Radius.badge,
+                borderWidth: 0.5, borderColor: colors.borderDefault,
+                paddingHorizontal: 8, paddingVertical: 3,
+              }}>
+                <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: colors.textMuted }}>
+                  Verify Price
+                </Text>
+              </View>
+            )}
+          </View>
 
           {displayedResult.specs && Object.keys(displayedResult.specs).length > 0 && (
             <View style={{ marginTop: Spacing.sm, borderTopWidth: 0.5, borderTopColor: colors.borderDefault, paddingTop: 8 }}>
@@ -616,10 +757,15 @@ export default function ConfirmScreen() {
             onPress={() => handleConfirm(displayedResult)}
           />
 
-          {/* Where to Buy — does NOT save, just searches suppliers */}
-          <SecondaryButton
-            label="WHERE TO BUY (DON'T SAVE)"
-            icon="cart-outline"
+          {/* Price Check — does NOT save, just searches suppliers */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              marginHorizontal: Spacing.md, marginVertical: 4, borderRadius: Radius.icon,
+              paddingVertical: 11, gap: 6,
+              backgroundColor: ELECTRIC_BLUE + '15', borderWidth: 1, borderColor: ELECTRIC_BLUE + '40',
+            }}
             onPress={() => {
               const junk = ['n/a', 'generic', 'unknown', 'not specified', ''];
               const clean = (s: string | null | undefined) => s && !junk.includes(s.toLowerCase().trim()) ? s.trim() : null;
@@ -629,7 +775,12 @@ export default function ConfirmScreen() {
               const q = [name, mpn, mfg].filter(Boolean).join(' ');
               router.push({ pathname: '/where-to-buy' as any, params: { itemName: q } });
             }}
-          />
+          >
+            <Ionicons name="pricetag-outline" size={16} color={ELECTRIC_BLUE} />
+            <Text numberOfLines={1} style={{ fontSize: FontSize.sm, fontWeight: '600', color: ELECTRIC_BLUE }}>
+              PRICE CHECK (DON'T SAVE)
+            </Text>
+          </TouchableOpacity>
 
           <SecondaryButton
             label="Edit Manually"

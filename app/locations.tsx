@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 let ExpoFile: any = null;
@@ -30,12 +30,14 @@ import type { StorageLocation, Part } from '@/lib/types';
 
 export default function LocationsScreen() {
   const router = useRouter();
+  const { locationId: locationIdParam } = useLocalSearchParams<{ locationId?: string }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<StorageLocation | null>(null);
   const [locationParts, setLocationParts] = useState<Part[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [didAutoSelect, setDidAutoSelect] = useState(false);
 
   // Add/edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -76,6 +78,17 @@ export default function LocationsScreen() {
   useEffect(() => {
     fetchLocations();
   }, [fetchLocations]);
+
+  // Auto-select location when navigated to with a locationId param (e.g. from QR scan)
+  useEffect(() => {
+    if (locationIdParam && locations.length > 0 && !didAutoSelect) {
+      const match = locations.find((l) => l.id === locationIdParam);
+      if (match) {
+        setSelectedLocation(match);
+        setDidAutoSelect(true);
+      }
+    }
+  }, [locationIdParam, locations, didAutoSelect]);
 
   useEffect(() => {
     if (selectedLocation) {

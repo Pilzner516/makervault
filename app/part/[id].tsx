@@ -1,6 +1,6 @@
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Linking, StyleSheet,
+  Alert, Linking, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,10 +17,15 @@ import {
   Spacing, FontSize, Radius,
 } from '@/components/UIKit';
 import { useTheme } from '@/context/ThemeContext';
+import { ELECTRIC_BLUE } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { getCategoryColor } from '@/lib/categoryColors';
 import { useInventoryStore } from '@/lib/zustand/inventoryStore';
 import { useSupplierStore } from '@/lib/zustand/supplierStore';
 import { sendLowStockAlert } from '@/lib/notifications';
+import { fetchProductImageUrl } from '@/lib/gemini';
+import { getPartByMPN, isOctopartAvailable } from '@/lib/octopart';
+import type { OctopartResult } from '@/lib/octopart';
 import { QuantityAdjuster } from '@/components/QuantityAdjuster';
 import type { Part, PartLocation, StorageLocation, PartSupplierLink, Supplier } from '@/lib/types';
 
@@ -41,6 +46,62 @@ export default function PartDetailScreen() {
   const part = parts.find((p) => p.id === id);
   const [locations, setLocations] = useState<LocationWithName[]>([]);
   const [supplierLinks, setSupplierLinks] = useState<SupplierLinkWithName[]>([]);
+  const [inWishlist, setInWishlist] = useState(false);
+
+  // ─── PRODUCT IMAGE ───
+  const [fetchingImage, setFetchingImage] = useState(false);
+  const rawProductUrl = part?.specs?.product_image_url ?? null;
+  // Distinguish direct image URLs from search URLs
+  const isDirectImage = rawProductUrl ? !rawProductUrl.includes('google.com/search') : false;
+  const productImageUrl = isDirectImage ? rawProductUrl : null;
+  const productSearchUrl = !isDirectImage ? rawProductUrl : null;
+
+  const handleFetchProductImage = useCallback(async () => {
+    if (!part || fetchingImage) return;
+    setFetchingImage(true);
+    try {
+      const url = await fetchProductImageUrl(part.name, part.mpn);
+      if (url) {
+        const specs = { ...(part.specs ?? {}), product_image_url: url };
+        await updatePart(part.id, { specs });
+      } else {
+        Alert.alert('No image found', 'Could not find a product image for this part.');
+      }
+    } catch { /* silent */ }
+    finally { setFetchingImage(false); }
+  }, [part, fetchingImage, updatePart]);
+
+  // ─── OCTOPART LIVE DATA ───
+  const [octopartLoading, setOctopartLoading] = useState(false);
+  const [octopartData, setOctopartData] = useState<OctopartResult | null>(null);
+  const [octopartFetched, setOctopartFetched] = useState(false);
+
+  const handleFetchOctopart = useCallback(async () => {
+    if (!part?.mpn || octopartLoading) return;
+    setOctopartLoading(true);
+    try {
+      const result = await getPartByMPN(part.mpn);
+      setOctopartData(result);
+      setOctopartFetched(true);
+      if (result) {
+        // Merge Octopart specs and datasheet into part
+        const specUpdates: Record<string, string> = { ...(part.specs ?? {}) };
+        for (const [key, val] of Object.entries(result.specs)) {
+          if (val) specUpdates[key] = val;
+        }
+        const datasheetUrl = result.specs['Datasheet URL'] ?? result.specs['datasheet'] ?? null;
+        const updates: Partial<Part> = { specs: specUpdates };
+        if (datasheetUrl && !part.datasheet_url) {
+          updates.datasheet_url = datasheetUrl;
+        }
+        await updatePart(part.id, updates);
+      }
+    } catch {
+      // Silently fail — Octopart is best-effort
+    } finally {
+      setOctopartLoading(false);
+    }
+  }, [part, octopartLoading, updatePart]);
 
   // ─── EDIT MODE ───
   const [editing, setEditing] = useState(false);
@@ -133,6 +194,25 @@ export default function PartDetailScreen() {
           supplier: sl.suppliers as unknown as Supplier,
         })));
       });
+    // Check if part is in wishlist
+    const checkWishlist = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const currentPart = parts.find((p) => p.id === id);
+        if (!currentPart) return;
+        const { data } = await supabase
+          .from('wishlist')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('name', currentPart.name)
+          .limit(1);
+        if (data && data.length > 0) setInWishlist(true);
+      } catch {
+        // Wishlist table may not exist yet
+      }
+    };
+    checkWishlist();
   }, [id]);
 
   const handleQuantityChange = useCallback(
@@ -145,6 +225,28 @@ export default function PartDetailScreen() {
     },
     [part, updatePart]
   );
+
+  const handleToggleWishlist = async () => {
+    if (!part) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Sign in required', 'Please sign in to use the wishlist.'); return; }
+      if (inWishlist) {
+        await supabase.from('wishlist').delete().eq('user_id', user.id).eq('name', part.name);
+        setInWishlist(false);
+      } else {
+        await supabase.from('wishlist').insert({
+          user_id: user.id,
+          name: part.name,
+          mpn: part.mpn ?? null,
+          category: part.category ?? null,
+        });
+        setInWishlist(true);
+      }
+    } catch {
+      Alert.alert('Error', 'Could not update wishlist. The feature may not be available yet.');
+    }
+  };
 
   const handleDelete = () => {
     if (!part) return;
@@ -176,6 +278,12 @@ export default function PartDetailScreen() {
         onBack={() => router.back()}
         rightElement={
           <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/qr-labels' as any, params: { type: 'part', id: part.id, title: part.name, subtitle: part.category ?? undefined } })} activeOpacity={0.7}>
+              <Ionicons name="qr-code-outline" size={22} color={colors.accent} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleToggleWishlist} activeOpacity={0.7}>
+              <Ionicons name={inWishlist ? 'bookmark' : 'bookmark-outline'} size={22} color={inWishlist ? ELECTRIC_BLUE : colors.accent} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={editing ? saveEdits : startEditing} activeOpacity={0.7}>
               <Ionicons name={editing ? 'checkmark-circle' : 'pencil'} size={22} color={editing ? colors.statusOk : colors.accent} />
             </TouchableOpacity>
@@ -187,10 +295,68 @@ export default function PartDetailScreen() {
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-        {/* Photo */}
-        {part.image_url && (
-          <Image source={{ uri: part.image_url }} style={{ height: 180, width: '100%', backgroundColor: colors.bgCard }} contentFit="cover" />
-        )}
+        {/* Photos — scan image + product image */}
+        <View style={s.photoRow}>
+          {part.image_url && (
+            <View style={s.photoWrap}>
+              <Image source={{ uri: part.image_url }} style={s.photo} contentFit="cover" />
+              <Text style={[s.photoLabel, { color: colors.textFaint }]}>YOUR SCAN</Text>
+            </View>
+          )}
+          {productImageUrl ? (
+            <TouchableOpacity style={s.photoWrap} activeOpacity={0.75} onPress={() => {
+              Alert.alert('Product Image', 'What would you like to do?', [
+                { text: 'Re-scan Image', onPress: () => {
+                  // Clear old image and fetch fresh
+                  const specs = { ...(part.specs ?? {}) };
+                  delete specs.product_image_url;
+                  updatePart(part.id, { specs }).then(() => handleFetchProductImage()).catch(() => {});
+                }},
+                { text: 'Browse Images', onPress: () => {
+                  const q = encodeURIComponent((part.mpn ? `${part.mpn} ` : '') + part.name);
+                  WebBrowser.openBrowserAsync(`https://www.google.com/search?tbm=isch&q=${q}+product`);
+                }},
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+            }}>
+              {fetchingImage ? (
+                <ActivityIndicator size="large" color={ELECTRIC_BLUE} style={s.photo} />
+              ) : (
+                <Image source={{ uri: productImageUrl }} style={s.photo} contentFit="contain" />
+              )}
+              <Text style={[s.photoLabel, { color: colors.textFaint }]}>PRODUCT · TAP TO RESCAN</Text>
+            </TouchableOpacity>
+          ) : productSearchUrl ? (
+            <TouchableOpacity
+              style={[s.photoWrap, s.fetchImageBtn, { borderColor: colors.borderDefault }]}
+              activeOpacity={0.75}
+              onPress={() => WebBrowser.openBrowserAsync(productSearchUrl)}
+            >
+              <Ionicons name="images-outline" size={28} color={ELECTRIC_BLUE} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: ELECTRIC_BLUE, textAlign: 'center', marginTop: 4 }}>
+                View Product{'\n'}Images
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[s.photoWrap, s.fetchImageBtn, { borderColor: colors.borderDefault }]}
+              activeOpacity={0.75}
+              onPress={handleFetchProductImage}
+              disabled={fetchingImage}
+            >
+              {fetchingImage ? (
+                <ActivityIndicator size="small" color={ELECTRIC_BLUE} />
+              ) : (
+                <>
+                  <Ionicons name="image-outline" size={28} color={ELECTRIC_BLUE} />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: ELECTRIC_BLUE, textAlign: 'center', marginTop: 4 }}>
+                    Find Product{'\n'}Image
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Edit mode save/cancel bar */}
         {editing && (
@@ -207,10 +373,10 @@ export default function PartDetailScreen() {
           </View>
         )}
 
-        {/* Supplier search */}
+        {/* Supplier search + Price Check */}
         {!editing && (
           <>
-            <EngravingLabel label="Look up part" action="All suppliers" onAction={() => router.push({ pathname: '/where-to-buy', params: { itemName: searchQuery || part.name } })} />
+            <EngravingLabel label="Look up part" action="All suppliers" onAction={() => router.push({ pathname: '/where-to-buy', params: { itemName: searchQuery || part.name, partId: part.id } })} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6, paddingBottom: 8 }}>
               {quickSuppliers.map((sup) => (
                 <TouchableOpacity key={sup.id} activeOpacity={0.75}
@@ -229,6 +395,85 @@ export default function PartDetailScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {/* Price Check button — right below supplier icons */}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={[s.priceCheckBtn, { backgroundColor: ELECTRIC_BLUE + '15', borderColor: ELECTRIC_BLUE + '40' }]}
+              onPress={() => router.push({ pathname: '/where-to-buy', params: { itemName: searchQuery || part.name, partId: part.id } })}
+            >
+              <Ionicons name="pricetag-outline" size={18} color={ELECTRIC_BLUE} />
+              <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '700', color: ELECTRIC_BLUE }}>
+                Price Check
+              </Text>
+              {part.specs?.estimated_price ? (
+                <Text style={{ fontSize: 14, fontWeight: '600', color: ELECTRIC_BLUE, opacity: 0.7, marginLeft: 'auto' }}>
+                  {part.specs.estimated_price}
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: '600', color: ELECTRIC_BLUE, opacity: 0.5, marginLeft: 'auto' }}>
+                  Verify
+                </Text>
+              )}
+            </TouchableOpacity>
+            {/* Fetch Live Data (Octopart) — subtle text button */}
+            {mpnClean && (
+              <TouchableOpacity
+                activeOpacity={0.75}
+                disabled={!isOctopartAvailable() || octopartLoading}
+                onPress={handleFetchOctopart}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12 }}
+              >
+                {octopartLoading ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Fetching live data...</Text>
+                  </>
+                ) : !isOctopartAvailable() ? (
+                  <Text style={{ fontSize: 13, color: colors.textDisabled }}>Configure Octopart API key in .env</Text>
+                ) : octopartFetched && octopartData ? (
+                  <Text style={{ fontSize: 13, color: colors.statusOk }}>Live data loaded</Text>
+                ) : octopartFetched && !octopartData ? (
+                  <Text style={{ fontSize: 13, color: colors.textMuted }}>No Octopart data found</Text>
+                ) : (
+                  <>
+                    <Ionicons name="cloud-download-outline" size={14} color={colors.textMuted} />
+                    <Text style={{ fontSize: 13, color: colors.textMuted }}>Fetch Live Data (Octopart)</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+            {/* Octopart seller prices */}
+            {octopartData && octopartData.sellers.length > 0 && (
+              <View style={{ marginHorizontal: 12, marginTop: 4, marginBottom: 4 }}>
+                {octopartData.sellers.slice(0, 5).map((seller) => {
+                  const bestOffer = seller.offers.find((o) => o.inStock && o.prices.length > 0);
+                  const bestPrice = bestOffer?.prices[0];
+                  return (
+                    <TouchableOpacity
+                      key={seller.name}
+                      activeOpacity={0.75}
+                      style={{
+                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                        paddingVertical: 6, paddingHorizontal: 8,
+                        borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle,
+                      }}
+                      onPress={bestOffer?.productUrl ? () => Linking.openURL(bestOffer.productUrl) : undefined}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>{seller.name}</Text>
+                      {bestPrice ? (
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: ELECTRIC_BLUE }}>
+                          {bestPrice.currency === 'USD' ? '$' : bestPrice.currency}{bestPrice.price.toFixed(2)}
+                        </Text>
+                      ) : (
+                        <Text style={{ fontSize: 13, color: colors.textMuted }}>
+                          {seller.offers.some((o) => o.inStock) ? 'In stock' : 'Out of stock'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </>
         )}
 
@@ -254,6 +499,23 @@ export default function PartDetailScreen() {
           </View>
         )}
 
+        {/* Find Item button */}
+        {!editing && (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={[s.findItemBtn, { backgroundColor: ELECTRIC_BLUE + '15', borderColor: ELECTRIC_BLUE + '40' }]}
+            onPress={() => router.push({ pathname: '/find-item' as never, params: { partId: part.id, partName: part.name } })}
+          >
+            <Ionicons name="scan-outline" size={20} color={ELECTRIC_BLUE} />
+            <Text style={{ fontSize: 16, fontWeight: '700', color: ELECTRIC_BLUE }}>
+              Find Item
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: '500', color: ELECTRIC_BLUE, opacity: 0.6, marginLeft: 'auto' }}>
+              Scan drawer QR
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* ─── DETAILS: View or Edit ─── */}
         <EngravingLabel label={editing ? 'Edit details' : 'Details'} />
         <PanelCard>
@@ -274,12 +536,54 @@ export default function PartDetailScreen() {
               <FieldRow label="Name" value={part.name} />
               {part.manufacturer && <FieldRow label="Manufacturer" value={part.manufacturer} />}
               {part.mpn && <FieldRow label="MPN" value={part.mpn} valueColor={colors.accent} />}
-              {part.category && <FieldRow label="Category" value={part.category} />}
+              {part.category && (
+                <View style={[s.fieldRowWrap, { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }]}>
+                  <Text style={[s.fieldLabel, { color: colors.textFaint }]}>CATEGORY</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {(() => {
+                      const catColor = getCategoryColor(part.category);
+                      return (
+                        <View style={{
+                          backgroundColor: catColor + '18', borderRadius: 3,
+                          borderWidth: 0.5, borderColor: catColor + '40',
+                          paddingHorizontal: 7, paddingVertical: 2,
+                        }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: catColor }}>{part.category}</Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
+                </View>
+              )}
               {part.subcategory && <FieldRow label="Subcategory" value={part.subcategory} />}
               {part.description && <FieldRow label="Description" value={part.description} />}
               {part.notes && <FieldRow label="Notes" value={part.notes} />}
               <FieldRow label="Quantity" value={String(part.quantity)} />
-              <FieldRow label="Threshold" value={String(part.low_stock_threshold)} isLast />
+              <FieldRow label="Threshold" value={String(part.low_stock_threshold)} />
+              {/* Price estimate */}
+              {part.specs?.estimated_price ? (
+                <FieldRow label="Est. Price" value={part.specs.estimated_price} valueColor={colors.statusOk} />
+              ) : (
+                <FieldRow label="Est. Price" value="Verify" valueColor={colors.textMuted} />
+              )}
+              {/* Saved supplier prices from price checks */}
+              {part.specs && Object.entries(part.specs)
+                .filter(([key]) => key.startsWith('price_') && key !== 'price_scan_date' && key !== 'estimated_price')
+                .map(([key, val]) => (
+                  <FieldRow
+                    key={key}
+                    label={key.replace(/^price_/, '').replace(/_/g, ' ')}
+                    value={String(val)}
+                    valueColor={ELECTRIC_BLUE}
+                  />
+                ))
+              }
+              {/* Last price check date */}
+              {part.specs?.price_scan_date && (
+                <FieldRow label="Last Price Check" value={part.specs.price_scan_date} />
+              )}
+              {/* Date added */}
+              <FieldRow label="Date Added" value={new Date(part.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} isLast />
             </>
           )}
         </PanelCard>
@@ -331,13 +635,7 @@ export default function PartDetailScreen() {
           </View>
         )}
 
-        {/* Reorder */}
-        {!editing && (
-          <View style={{ marginTop: 4 }}>
-            <SecondaryButton label="Where to Buy" icon="cart-outline"
-              onPress={() => router.push({ pathname: '/where-to-buy', params: { itemName: searchQuery || part.name } })} />
-          </View>
-        )}
+        {/* Reorder — removed, Price Check is now above metrics */}
       </ScrollView>
     </ScreenLayout>
   );
@@ -377,6 +675,16 @@ const s = StyleSheet.create({
   editLabel: { fontSize: 14, fontWeight: '700', letterSpacing: 0.05, marginBottom: 6 },
   editInput: { fontSize: 16, fontWeight: '600', borderWidth: 1, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 8 },
   supplierPill: { flexDirection: 'row', alignItems: 'center', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 10, gap: 6, minHeight: 44 },
+  fieldRowWrap: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, minHeight: 44 },
+  fieldLabel: { fontSize: 14, fontWeight: '700', letterSpacing: 0.05 },
+  priceCheckBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginTop: 4, borderRadius: 4, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
+  findItemBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 12, marginTop: 8, borderRadius: 4, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
   adjusterWrap: { marginHorizontal: 12, marginTop: 8, borderRadius: 4, padding: 14, borderWidth: 0.5 },
   lowStockBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 4, paddingVertical: 6, marginTop: 8, gap: 4 },
+  photoRow: { flexDirection: 'row', height: 160 },
+  photoWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  photo: { width: '100%', height: 140 },
+  photoLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginTop: 2 },
+  fetchImageBtn: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 4, margin: 8 },
+  noPhotoBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderBottomWidth: 0.5 },
 });

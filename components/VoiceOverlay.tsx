@@ -154,9 +154,17 @@ export function VoiceOverlay({ visible, onClose }: VoiceOverlayProps) {
         if (!match) return `No ${partName} in inventory.`;
         return `You have ${match.quantity} ${match.name}.`;
       }
-      case 'find_location':
+      case 'find_location': {
         if (!partName) return 'Which part are you looking for?';
-        return `Check the part detail screen for ${partName}'s location.`;
+        const locMatch = parts.find((p) =>
+          p.name.toLowerCase().includes(partName.toLowerCase()),
+        );
+        if (locMatch) {
+          router.push(`/part/${locMatch.id}`);
+          return `Opening ${locMatch.name} — check the locations section.`;
+        }
+        return `No ${partName} found in inventory.`;
+      }
       case 'low_stock_check': {
         const lowStock = parts.filter((p) => p.quantity <= p.low_stock_threshold);
         if (lowStock.length === 0) return 'All parts are well stocked.';
@@ -167,7 +175,7 @@ export function VoiceOverlay({ visible, onClose }: VoiceOverlayProps) {
         router.push('/(tabs)/scan');
         return 'Opening scanner.';
       case 'get_project_ideas':
-        router.push('/(tabs)/explore' as never);
+        router.push('/(tabs)/projects');
         return 'Let me show you some project ideas.';
       case 'reorder_part':
         return `Check the part detail screen to reorder ${partName ?? 'parts'}.`;

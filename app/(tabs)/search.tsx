@@ -85,6 +85,7 @@ export default function SearchScreen() {
     '3d printing': ['3d print', 'filament', 'pla', 'petg', 'abs', 'tpu', 'resin', 'nozzle', 'hotend', 'extruder', 'bed', 'build plate', 'stepper', 'ender', 'prusa', 'bambu', 'creality', 'bowden', 'direct drive', 'layer', 'infill', 'slicer', 'gcode'],
     'materials': ['material', 'alumin', 'steel', 'wood', 'timber', 'acrylic', 'plexiglass', 'foam', 'adhesive', 'epoxy', 'tape', 'sheet', 'stock', 'copper', 'pcb', 'brass', 'plastic', 'rubber', 'silicone', 'carbon fiber', 'fiberglass', 'fabric', 'leather', 'vinyl', 'paint', 'primer', 'sealant', 'lubricant', 'grease', 'oil'],
     'mechanical': ['mechanical', 'bearing', 'belt', 'pulley', 'spring', 'gear', 'rail', 'linear', 'motor', 'coupling', 'actuator', 'servo', 'shaft', 'rod', 'bushing', 'cam', 'chain', 'sprocket', 'pneumatic', 'hydraulic', 'piston', 'valve', 'gasket', 'o-ring', 'seal'],
+    'robotics': ['robot', 'servo', 'stepper', 'dc motor', 'motor driver', 'motor controller', 'esc', 'wheel', 'tire', 'chassis', 'frame', 'robotic arm', 'gripper', 'actuator', 'lidar', 'ultrasonic', 'ir sensor', 'line follower', 'drone', 'propeller', 'flight controller', 'gimbal', 'fpv', 'rc receiver', 'rc transmitter', 'quadcopter', 'hexapod', 'bipedal', 'omni wheel', 'mecanum', 'encoder', 'pid', 'imu', 'gyroscope', 'accelerometer', 'robot kit', 'robot platform'],
     'safety & ppe': ['safety', 'glove', 'goggle', 'glasses', 'mask', 'respirator', 'ear', 'protection', 'ppe', 'first aid', 'fire', 'extinguisher', 'apron', 'shield', 'ventilation', 'fume'],
   };
 
