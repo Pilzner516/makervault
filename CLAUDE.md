@@ -247,7 +247,7 @@ Cinematic launch sequence on app start: grid fade-in -> corner markers -> vault 
 
 ## Known Issues
 - [ ] expo-linear-gradient disabled until dev build includes native module (SafeGradient fallback in place)
-- [ ] master vs main branch confusion -- working branch is `master`, remote default is `main`
+- [x] master vs main branch confusion -- pushed to origin/master, remote set
 - [ ] README is Expo boilerplate -- needs project-specific content
 - [ ] RLS policies may need review before public launch
 - [ ] Generic error messages shown to users (need user-friendly error handling)
