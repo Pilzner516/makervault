@@ -239,3 +239,23 @@ Stack screens: confirm, part/[id], where-to-buy, all-suppliers, modal (Settings)
 
 ## VaultSplash Animation
 Cinematic launch sequence on app start: grid fade-in -> corner markers -> vault door spring-in -> dial combination spin (3 rotations) -> latch unlock (3 sequential) -> door swing open (3D perspective) -> flash -> home screen zoom-in from center -> splash fade-out.
+
+## Last 3 Sessions
+- **2026-03-28** -- Barcode/QR scanning, QR label generator, per-supplier Gemini prices, Octopart integration, Robotics category, curated projects, Find Item AR, wishlist
+- **2026-03-20** -- Categorization overhaul: Gemini prompt, keyword matching, category filtering, drill-down counts
+- **2026-03-18** -- Voice assistant fix, category counts, Where to Buy on confirm, home card text wrapping
+
+## Known Issues
+- [ ] expo-linear-gradient disabled until dev build includes native module (SafeGradient fallback in place)
+- [ ] master vs main branch confusion -- working branch is `master`, remote default is `main`
+- [ ] README is Expo boilerplate -- needs project-specific content
+- [ ] RLS policies may need review before public launch
+- [ ] Generic error messages shown to users (need user-friendly error handling)
+
+## Decisions Log
+- Gemini estimated_price added to identification prompts (single + bulk)
+- QR codes use simplified `MV:{uuid}` prefix instead of `makervault://` URIs (legacy prefixes still parsed)
+- Projects tab switched from Instructables API to curated project catalog (more reliable, offline-capable)
+- Octopart data merged into part specs on demand (not auto-fetched)
+- Per-supplier price scanning via Gemini (not live API scraping)
+- Robotics added as 8th category with 24 subcategories
