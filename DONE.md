@@ -1,6 +1,9 @@
 # DONE.md - Completed Features & Changes
 # Updated automatically at every Claude Code session wrap.
 
+## 2026-03-31
+- Backfilled DONE.md from full git history (38 commits across 7 dates, 2026-03-15 to 2026-03-28)
+
 ## 2026-03-28
 - Barcode and QR code scanning with MV: prefix deep-linking to parts, categories, and locations
 - QR label generator with 3 sizes and Phomemo D30 printer support

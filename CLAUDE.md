@@ -241,9 +241,9 @@ Stack screens: confirm, part/[id], where-to-buy, all-suppliers, modal (Settings)
 Cinematic launch sequence on app start: grid fade-in -> corner markers -> vault door spring-in -> dial combination spin (3 rotations) -> latch unlock (3 sequential) -> door swing open (3D perspective) -> flash -> home screen zoom-in from center -> splash fade-out.
 
 ## Last 3 Sessions
+- **2026-03-31** -- Backfilled DONE.md from full git history (38 commits, 7 dates)
 - **2026-03-28** -- Barcode/QR scanning, QR label generator, per-supplier Gemini prices, Octopart integration, Robotics category, curated projects, Find Item AR, wishlist
 - **2026-03-20** -- Categorization overhaul: Gemini prompt, keyword matching, category filtering, drill-down counts
-- **2026-03-18** -- Voice assistant fix, category counts, Where to Buy on confirm, home card text wrapping
 
 ## Known Issues
 - [ ] expo-linear-gradient disabled until dev build includes native module (SafeGradient fallback in place)
